@@ -86,7 +86,25 @@ export class Renderer {
     this.heroMode = 'sheet'; // 'sheet' | 'svg' | 'fallback'
     this.heroReady = false;
     const img = new Image();
-    img.onload = () => { this.heroReady = true; };
+    img.onload = () => {
+      // #12: el sheet del humano llegó con fondo blanco opaco; chroma-key del blanco -> transparente
+      if (this.heroMode === 'sheet') {
+        try {
+          const c = document.createElement('canvas');
+          c.width = img.naturalWidth; c.height = img.naturalHeight;
+          const x = c.getContext('2d');
+          x.drawImage(img, 0, 0);
+          const id = x.getImageData(0, 0, c.width, c.height);
+          const d = id.data;
+          for (let i = 0; i < d.length; i += 4) {
+            if (d[i] > 225 && d[i + 1] > 225 && d[i + 2] > 225) d[i + 3] = 0;
+          }
+          x.putImageData(id, 0, 0);
+          this.heroImg = c;
+        } catch (e) { /* si falla, se dibuja tal cual */ }
+      }
+      this.heroReady = true;
+    };
     img.onerror = () => {
       if (this.heroMode === 'sheet') {
         this.heroMode = 'svg';
