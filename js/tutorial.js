@@ -284,7 +284,7 @@ export function showTutorial(root, onDone) {
           <div class="tut-gauge-label">REACTOR</div>
           <div class="tut-gauge"><div class="tut-gauge-fill" style="height:20%"></div></div>
         </div>
-        <p style="margin:0">Población fuera de 10&ndash;80 durante 2 turnos = <span style="color:var(--red)">boom</span>.</p>
+        <p style="margin:0">Población fuera de 10&ndash;60 durante 2 turnos = <span style="color:var(--red)">boom</span>.</p>
       </div>
       <p class="tut-hint">Vigila el gauge del panel derecho mientras juegas.</p>
     `;

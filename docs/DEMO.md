@@ -23,31 +23,33 @@ Enter × 4 (o clic en "JUGAR") para pasar los 4 pasos, o `Escape` para saltarlo 
 
 ## 3. Secuencia ganadora verificada (teclado, sin API)
 
-Nivel fijo: héroe en (2,21), salida en (37,12), `maxTurns` 30. El tablero envuelve toroidalmente,
-así que la ruta corta es ir al OESTE (wrap) y luego al NORTE. Verificado con Playwright contra
-`window.__game` (movePlayer/castSpell reales) tras cada cambio de nivel:
+Nivel fijo: héroe en (2,21), salida en (37,12) sellada por un `tub` (4 celdas, para siempre vivas)
+en sus 4 vecinos ortogonales — (37,11) (36,12) (38,12) (37,13). Como el héroe solo se mueve en
+ortogonal, **la salida es matemáticamente inalcanzable sin romper el tub con un hechizo**
+(confirmado: caminar hasta ahí sin castear nada mata al jugador). `maxTurns` 24, población en
+[10,60]. Verificado con Playwright contra `window.__game` (movePlayer/castSpell reales):
 
-**Secuencia exacta (14 teclas de movimiento + 1 hechizo = 15 turnos, dentro de la ventana ideal
-15-25 turnos, con 1 hechizo lanzado):**
+**Secuencia exacta (gana en el turno 15, con 1 hechizo, población 23-49 en toda la partida):**
 
 ```
-A            (oeste, wrap 2→1)
-5            (castea BLINKER por teclado — "un faro" a 3 celdas al este del héroe)
-A A A A      (oeste, wrap ...→0→39→38→37)
-W W W W W W W W W   (norte, de y=21 a y=12: llegada a la salida → REACTOR ESTABILIZADO)
+A A A                (oeste con wrap: 2→1→0→39)
+W W W W W W W W W    (norte: y 21→12, llegada a (39,12), junto al tub)
+6                     (castea R-PENTOMINO por teclado → cae en (36,12) dir W: rompe 2 puntas
+                       del tub, (38,12) y (37,13), en la siguiente generación)
+A A                   (oeste: 39→38→37, entra a la salida → REACTOR ESTABILIZADO)
 ```
 
-Resultado real de esta corrida: `turn 15`, `spellsCast 1`, `phase "won"`, score 1700 (rank B).
-Si prefieres no castear nada, la ruta pura de movimiento (5× oeste + 9× norte) también gana, en
-14 turnos — usa la de arriba para la demo porque muestra el grimorio en acción.
+Resultado real de esta corrida: `turn 15`, `spellsCast 1`, `phase "won"`. Ojo con el orden de las
+teclas de movimiento: son `A` (izquierda/oeste) y `W` (arriba/norte) del layout WASD, no letras
+literales de "oeste"/"norte".
 
-Nota de diseño (honesta): la salida está guardada por 3 `block` + 1 `beehive` estables a distancia
-2 en las direcciones cardinales (no un anillo topológicamente sellado — ver `CLAUDE.md`, no es
-alcanzable con still-lifes pequeños contra un jugador que solo se mueve en ortogonal sin que el
-propio anillo se vuelva inestable). Bloquean la aproximación recta por el sur; en esta corrida esa
-guardia ya se había disuelto por la evolución del `r_pentomino` cercano antes de que el héroe
-llegara, así que caminar bastaba. El hechizo de la secuencia de arriba es para el show, no
-estrictamente obligatorio — sé transparente con esto si preguntan.
+Amenaza extra en el corredor: hay un `LWSS` viajando al ESTE por la fila 16 desde x=28, que cruza
+la zona de la salida sobre la gen 20-22. La secuencia de arriba entra a tiempo (turno 15) y no lo
+cruza; si te retrasas (p.ej. bloqueando el LWSS con block/eater, teclas 3/7) el margen se reduce.
+
+No probamos con LWSS (tecla 2) para romper el tub: su caja (5×4) desde `player.x-3` con el jugador
+a solo 2 celdas de la salida acaba pisando la propia casilla del jugador y lo mata — usa
+r_pentomino (tecla 6), que es más compacto (3×3) y no llega hasta el héroe.
 
 ## 4. Cinco hechizos de prueba con la API (si hay key)
 

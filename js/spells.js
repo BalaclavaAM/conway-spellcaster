@@ -69,6 +69,14 @@ function chebyshev(x1, y1, x2, y2) {
   return Math.max(Math.abs(x1 - x2), Math.abs(y1 - y2));
 }
 
+// Distancia con signo más corta de a->b en un eje toroidal de tamaño `size`.
+function wrapDelta(a, b, size) {
+  let d = (b - a) % size;
+  if (d > size / 2) d -= size;
+  if (d < -size / 2) d += size;
+  return d;
+}
+
 function validate(raw, ctx) {
   const player = (ctx && ctx.player) || { x: 2, y: 21 };
   const spell = SPELL_IDS.includes(raw && raw.spell) ? raw.spell : 'lwss';
@@ -88,13 +96,33 @@ function validate(raw, ctx) {
 
 export function keyboardFallback(key, ctx) {
   const player = (ctx && ctx.player) || { x: 2, y: 21 };
+  const exit = (ctx && ctx.exit) || null;
   const i = clamp(Number(key) - 1, 0, SPELL_IDS.length - 1);
   const spell = SPELL_IDS[i] || 'lwss';
+
+  // #12: sin objetivo (exit) explícito, cae fijo al ESTE (comportamiento original). Con
+  // objetivo, apunta 3 celdas hacia la salida (con wrap) para poder romper el sello que la
+  // rodea desde cualquier lado por el que se llegue.
+  let dir = 'E';
+  let x = player.x + 3;
+  let y = player.y;
+  if (exit) {
+    const dx = wrapDelta(player.x, exit.x, W);
+    const dy = wrapDelta(player.y, exit.y, H);
+    if (Math.abs(dx) >= Math.abs(dy)) {
+      dir = dx < 0 ? 'W' : 'E';
+      x = player.x + (dir === 'W' ? -3 : 3);
+    } else {
+      dir = dy < 0 ? 'N' : 'S';
+      y = player.y + (dir === 'N' ? -3 : 3);
+    }
+  }
+
   return {
     spell,
-    x: clamp(player.x + 3, 0, W - 1),
-    y: clamp(player.y, 0, H - 1),
-    dir: 'E',
+    x: clamp(x, 0, W - 1),
+    y: clamp(y, 0, H - 1),
+    dir,
     comment: FALLBACK_COMMENTS[spell] || FALLBACK_COMMENTS.lwss,
   };
 }

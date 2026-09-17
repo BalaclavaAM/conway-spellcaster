@@ -94,8 +94,8 @@ export const state = {
   phase: 'tutorial' | 'play' | 'won' | 'dead',
   grid, age, prevGrid,                          // de life.js
   player: { x, y },  exit: { x, y },
-  turn, maxTurns: 30, gen,
-  pop, popMin: 10, popMax: 80, outOfRangeStreak,
+  turn, maxTurns: 24, gen,
+  pop, popMin: 10, popMax: 60, outOfRangeStreak,
   spellsCast: 0, everOutOfRange: false,
   log: [],                                      // [{ text, kind: 'cast'|'ai'|'sys' }]
   aiComment: '',
@@ -110,18 +110,32 @@ Muere si la celda destino está viva **después** del step, o si `pop` está fue
 durante 2 turnos seguidos (el primero dispara `sfx.alarm()` y el gauge en rojo). Gana al llegar a `exit`.
 Pierde también si `turn > maxTurns`.
 
-**Nivel fijo (determinista, para poder ensayar la demo):**
-- jugador en (2, 21), `clearRect(0, 19, 5, 5)`. El movimiento envuelve toroidalmente (como `life.idx`):
-  la ruta corta a la salida es ir al OESTE (wrap 2→1→0→39→38) y luego al NORTE (~14 movimientos).
-- salida en (37, 12), guardada por 3 `block` + 1 `beehive` a distancia 2 en las 4 direcciones
-  cardinales (`EXIT_GUARDS` en game.js), separados ≥3 celdas entre sí para no interactuar (still
-  lifes reales, para siempre estáticos). **No es un sello topológico perfecto** (un GoL still-life
-  pequeño no puede sellar el 100% de las rutas contra un jugador que solo se mueve en ortogonal sin
-  volverse él mismo inestable); bloquean la aproximación recta por el sur, así que el jugador debe
-  rodear un obstáculo o romperlo con un hechizo cerca de la salida.
+**Nivel fijo (determinista, para poder ensayar la demo) — versión final #12:**
+- jugador en (2, 21), `clearRect(0, 19, 5, 5)`. El movimiento envuelve toroidalmente (como `life.idx`).
+- salida en (37, 12), `maxTurns` 24, `popMin` 10, `popMax` 60 (antes 30/80: el nivel era trivial y sin
+  riesgo real).
+- **Sello de la salida (`EXIT_TUB` en game.js): un `tub` de 4 celdas en los 4 vecinos ortogonales de
+  la salida** — (37,11) (36,12) (38,12) (37,13) — vivas para siempre (cada una tiene exactamente 2
+  vecinos vivos: las otras dos puntas del tub). Como el jugador solo se mueve en ortogonal, esto SÍ
+  sella el 100% de las rutas (BFS confirma "no alcanzable" durante las 24 generaciones sin
+  intervención): para pisar la salida hay que pasar antes por una de esas 4 celdas, y las 4 son
+  intocables sin un hechizo. Se rompe con un LWSS o r_pentomino cerca (el vecindario de una punta
+  del tub sube de 2 a >3 y muere, abriendo un hueco de 1 celda).
+- Amenaza del corredor: un `lwss` orientado al ESTE en (28, 16) — cruza hacia la zona de la salida
+  sobre la gen 20-22; si el jugador se queda ahí parado sin intervenir mucho tiempo puede chocar
+  con él (bloquéalo con block/eater, tecla 3/7, o entra antes).
 - colonias iniciales: un `r_pentomino` en (18, 10) y un `glider` en (30, 3) orientado hacia SW.
-- población inicial debe quedar entre 20 y 45; se mantiene entre 20 y 56 durante 35 generaciones sin
-  intervención del jugador (verificado con simulación node de life.js + patterns.js reales).
+- población inicial 23; sin intervención se mantiene en 23-64 durante 26 generaciones (roza
+  `popMax` justo en el límite de `maxTurns`, verificado con simulación node de life.js + patterns.js
+  reales) — jugar bien (entrar antes de que suba) evita el roce.
+- **Secuencia ganadora verificada** (teclado, sin API, `window.__game` real vía Playwright):
+  `A A A` (oeste con wrap: 2→1→0→39) · `W×9` (norte: 21→12, llega a (39,12)) · `6` (cast
+  r_pentomino en (36,12) dir W — rompe 2 puntas del tub, (38,12) y (37,13)) · `A A` (oeste:
+  39→38→37, entra a la salida). **Gana en el turno 15, con 1 hechizo, población 23-49 durante toda
+  la partida (nunca sale de [10,60]).** Sin castear ningún hechizo, caminar hasta pisar el tub
+  mata al jugador (confirmado): el nivel requiere hechizo de verdad.
+- `keyboardFallback` (js/spells.js) apunta 3 celdas hacia la salida (con wrap), no siempre al ESTE:
+  compara la distancia con signo en x vs y hacia `ctx.exit` y elige N/E/S/W en consecuencia.
 
 ### js/spells.js
 ```js

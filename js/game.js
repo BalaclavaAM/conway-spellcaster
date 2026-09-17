@@ -37,33 +37,24 @@ const sfx = (audio && audio.sfx) || { cast() {}, step() {}, die() {}, win() {}, 
 // ---------------------------------------------------------------------------
 // Nivel determinista (ver CLAUDE.md "Nivel fijo").
 //
-// Guardia de la salida: #12 reemplazó el "anillo cerrado" original (4 `block` + 3 `block`
-// solapados a propósito para sellar el BFS) porque el solape hacía que celdas del anillo
-// tuvieran 4+ vecinos vivos entre sí -> el propio anillo generaba caos y disparaba la
-// población a 80-115 en ~20 generaciones (ver CLAUDE.md, sección "Nivel fijo"). Un sello
-// topológico perfecto contra un jugador que solo se mueve en ortogonal (nunca diagonal)
-// no es alcanzable con still-lifes pequeños sin que se toquen (y al tocarse, en Life,
-// dejan de ser still-lifes). Fix: 3 `block` + 1 `beehive` separados >=3 celdas entre sí
-// (cero interacción, cada uno para siempre estático) puestos en las 4 direcciones
-// cardinales a distancia 2 de la salida. No sellan el 100% de las rutas, pero sí bloquean
-// la aproximación recta (el jugador debe rodear un obstáculo o romperlo con un hechizo).
-// Verificado con node + js/life.js + js/patterns.js reales: población entre 20 y 56 en
-// 35 generaciones sin ninguna intervención del jugador (antes: hasta 115). Ver /tmp de
-// la sesión de integración para el script de verificación.
+// Sello de la salida: un `tub` (still life de 4 celdas) en los 4 vecinos ortogonales de
+// la salida -- (x,y-1) (x-1,y) (x+1,y) (x,y+1) -- sella el 100% de las rutas: el jugador
+// solo se mueve en ortogonal, así que para pisar la salida tendría que pasar antes por una
+// de esas 4 celdas, y las 4 están vivas para siempre (cada una tiene exactamente 2 vecinos
+// vivos -- las otras dos puntas del tub -- así que sobrevive indefinidamente sin interactuar
+// con nada más). BFS confirma "no alcanzable" en las 30 generaciones (ver bfsExitReachable).
+// Se rompe con un hechizo (LWSS o r_pentomino) cerca de la salida, que sube el vecindario de
+// alguna punta del tub por encima de 3 y la mata, abriendo un hueco de 1 celda.
+// Verificado con node + js/life.js reales: población 14-55 en 30 generaciones sin intervención.
 const LEVEL = {
   player: { x: 2, y: 21 },
   exit: { x: 37, y: 12 },
   popMin: 10,
-  popMax: 80,
-  maxTurns: 30,
+  popMax: 60,
+  maxTurns: 24,
 };
 
-const EXIT_GUARDS = [
-  { type: 'block', dx: 0, dy: -2 },
-  { type: 'block', dx: 0, dy: 2 },
-  { type: 'block', dx: -2, dy: 0 },
-  { type: 'beehive', dx: 2, dy: -1 },
-];
+const EXIT_TUB = [[0, -1], [-1, 0], [1, 0], [0, 1]];
 
 function bfsExitReachable(grid, from, to) {
   const seen = new Uint8Array(life.W * life.H);
@@ -90,15 +81,17 @@ export function buildLevel() {
   life.stamp(grid0, patterns.PATTERNS.r_pentomino.cells, 18, 10);
   life.stamp(grid0, patterns.oriented('glider', 'S'), 30, 3);
 
-  for (const g of EXIT_GUARDS) {
-    life.stamp(grid0, patterns.PATTERNS[g.type].cells, LEVEL.exit.x + g.dx, LEVEL.exit.y + g.dy);
-  }
+  life.stamp(grid0, EXIT_TUB, LEVEL.exit.x, LEVEL.exit.y);
+  // Amenaza del corredor oeste: LWSS viajando al ESTE por la fila 16, sale cerca de x=28 y
+  // llega a x~39 (junto al tub) sobre la gen 20-22, justo cuando conviene esperar ahí a que
+  // el hechizo del jugador rompa el tub. Obliga a decidir: bloquear (tecla 3/7) o entrar antes.
+  life.stamp(grid0, patterns.oriented('lwss', 'E'), 28, 16);
 
   life.clearRect(grid0, 0, 19, 5, 5);
 
   const pop0 = life.population(grid0);
   console.log(`[game] nivel construido: población inicial = ${pop0}`);
-  if (pop0 < 20 || pop0 > 45) {
+  if (pop0 < LEVEL.popMin || pop0 > 45) {
     console.error(`[game] ¡población inicial fuera de rango esperado! pop=${pop0}`);
   }
   console.log('[game] salida accesible sin hechizo:', bfsExitReachable(grid0, LEVEL.player, LEVEL.exit));
