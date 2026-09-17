@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>life.js tests</title>
+<style>
+  html, body { background: #000; color: #35ff8a; font-family: 'Cascadia Mono', Consolas, monospace; margin: 0; padding: 16px; white-space: pre-wrap; }
+  .fail { color: #ff3b3b; }
+  .pass { color: #35ff8a; }
+</style>
+</head>
+<body>
+<div id="out">Corriendo tests...</div>
+<script type="module">
+import { W, H, createGrid, idx, step, population, stamp, clearRect } from './life.js';
+
+const lines = [];
+let failures = 0;
+
+function assert(cond, msg) {
+  if (cond) {
+    lines.push(`PASS: ${msg}`);
+  } else {
+    failures++;
+    lines.push(`FAIL: ${msg}`);
+  }
+}
+
+function gridToSet(grid) {
+  const s = new Set();
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (grid[idx(x, y)]) s.add(x + ',' + y);
+  return s;
+}
+
+function setsEqual(a, b) {
+  if (a.size !== b.size) return false;
+  for (const v of a) if (!b.has(v)) return false;
+  return true;
+}
+
+// --- idx wrap toroidal en esquinas ---
+assert(idx(-1, -1) === idx(W - 1, H - 1), 'idx(-1,-1) envuelve a esquina (W-1,H-1)');
+assert(idx(W, H) === idx(0, 0), 'idx(W,H) envuelve a (0,0)');
+assert(idx(-1, 0) === idx(W - 1, 0), 'idx(-1,0) envuelve en x');
+assert(idx(0, -1) === idx(0, H - 1), 'idx(0,-1) envuelve en y');
+
+// --- blinker: periodo 2 ---
+{
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [1, 0], [2, 0]], 5, 5);
+  const gen0 = gridToSet(grid);
+  let age;
+  ({ grid, age } = step(grid, undefined));
+  const gen1 = gridToSet(grid);
+  ({ grid, age } = step(grid, age));
+  const gen2 = gridToSet(grid);
+
+  assert(!setsEqual(gen0, gen1), 'blinker cambia de forma en gen1');
+  assert(setsEqual(gen0, gen2), 'blinker vuelve a forma original en gen2 (periodo 2)');
+}
+
+// --- block: estable ---
+{
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [1, 0], [0, 1], [1, 1]], 10, 10);
+  const gen0 = gridToSet(grid);
+  let age;
+  ({ grid, age } = step(grid, undefined));
+  const gen1 = gridToSet(grid);
+  assert(setsEqual(gen0, gen1), 'block permanece idéntico tras 1 step');
+  ({ grid, age } = step(grid, age));
+  assert(setsEqual(gen0, gridToSet(grid)), 'block permanece idéntico tras 2 steps');
+}
+
+// --- glider: se traslada (+1,+1) tras 4 steps ---
+{
+  let grid = createGrid();
+  const gliderCells = [[1, 0], [2, 1], [0, 2], [1, 2], [2, 2]];
+  stamp(grid, gliderCells, 15, 5);
+  const expected = new Set(gliderCells.map(([dx, dy]) => (15 + dx + 1) + ',' + (5 + dy + 1)));
+  let age;
+  ({ grid, age } = step(grid, undefined));
+  ({ grid, age } = step(grid, age));
+  ({ grid, age } = step(grid, age));
+  ({ grid, age } = step(grid, age));
+  assert(setsEqual(gridToSet(grid), expected), 'glider trasladado (+1,+1) tras 4 steps');
+}
+
+// --- wrap toroidal: patrón que cruza el borde se comporta igual que en el centro ---
+{
+  // blinker vertical apoyado sobre la esquina (envuelve x=0/W-1)
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [0, 1], [0, 2]], W - 1, 0);
+  let age;
+  ({ grid, age } = step(grid, undefined));
+  // tras 1 step debería volverse horizontal en y=1, ocupando (W-2,1)-(W-1,1)-(0,1) envuelto
+  const alive = gridToSet(grid);
+  assert(alive.has((W - 2) + ',1') && alive.has((W - 1) + ',1') && alive.has('0,1'),
+    'blinker en el borde envuelve correctamente (toroidal)');
+}
+
+// --- population ---
+{
+  let grid = createGrid();
+  assert(population(grid) === 0, 'population de grid vacío es 0');
+  stamp(grid, [[0, 0], [1, 0], [0, 1], [1, 1]], 3, 3);
+  assert(population(grid) === 4, 'population cuenta 4 celdas vivas (block)');
+}
+
+// --- age correcto ---
+{
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [1, 0], [2, 0]], 20, 20); // blinker
+  let age;
+  ({ grid, age } = step(grid, undefined));
+  // celdas recién nacidas -> age 1
+  const born = gridToSet(grid);
+  let allAge1 = true;
+  for (const key of born) {
+    const [x, y] = key.split(',').map(Number);
+    if (age[idx(x, y)] !== 1) allAge1 = false;
+  }
+  assert(allAge1, 'celdas recién nacidas tienen age === 1');
+
+  ({ grid, age } = step(grid, age));
+  // vuelve a la forma original (horizontal): la celda central del blinker es la única
+  // que está viva en ambas orientaciones, así que sobrevive y su age sube a 2;
+  // las dos puntas renacen con age === 1.
+  assert(age[idx(21, 20)] === 2, 'blinker: celda central sobrevive entre orientaciones, age === 2');
+  assert(age[idx(20, 20)] === 1 && age[idx(22, 20)] === 1, 'blinker: puntas renacen con age === 1');
+
+  // celda estable (block) debe incrementar age
+  let grid2 = createGrid();
+  stamp(grid2, [[0, 0], [1, 0], [0, 1], [1, 1]], 25, 5);
+  let age2;
+  ({ grid: grid2, age: age2 } = step(grid2, undefined));
+  assert(age2[idx(25, 5)] === 1, 'block: age === 1 tras primer step (nace)');
+  ({ grid: grid2, age: age2 } = step(grid2, age2));
+  assert(age2[idx(25, 5)] === 2, 'block: age === 2 tras segundo step (sobrevive)');
+  ({ grid: grid2, age: age2 } = step(grid2, age2));
+  assert(age2[idx(25, 5)] === 3, 'block: age === 3 tras tercer step (sobrevive)');
+
+  // age undefined se trata como todo 0, no debe romper
+  let grid3 = createGrid();
+  stamp(grid3, [[0, 0], [1, 0], [0, 1], [1, 1]], 12, 12);
+  const { grid: g3, age: a3 } = step(grid3, undefined);
+  assert(a3[idx(12, 12)] === 1, 'age undefined tratado como 0: nace con age 1');
+}
+
+// --- step no muta los arrays de entrada ---
+{
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [1, 0], [2, 0]], 8, 8);
+  let age0 = new Uint16Array(W * H);
+  const gridSnapshot = grid.slice();
+  const ageSnapshot = age0.slice();
+  const result = step(grid, age0);
+  assert(grid.every((v, i) => v === gridSnapshot[i]), 'step no muta el grid de entrada');
+  assert(age0.every((v, i) => v === ageSnapshot[i]), 'step no muta el age de entrada');
+  assert(result.grid instanceof Uint8Array, 'step devuelve grid como Uint8Array nuevo');
+  assert(result.age instanceof Uint16Array, 'step devuelve age como Uint16Array nuevo');
+  assert(result.grid !== grid, 'step devuelve un array de grid distinto (nueva referencia)');
+  assert(result.age !== age0, 'step devuelve un array de age distinto (nueva referencia)');
+}
+
+// --- stamp / clearRect ---
+{
+  let grid = createGrid();
+  stamp(grid, [[0, 0], [1, 1]], 0, 0);
+  assert(grid[idx(0, 0)] === 1 && grid[idx(1, 1)] === 1, 'stamp escribe celdas en posiciones esperadas');
+  stamp(grid, [[-1, -1]], 0, 0); // wrap negativo
+  assert(grid[idx(W - 1, H - 1)] === 1, 'stamp envuelve offsets negativos');
+
+  clearRect(grid, 0, 0, 2, 2);
+  assert(population(grid) === 1, 'clearRect limpia el rectángulo (sobrevive la celda envuelta fuera del rect)');
+}
+
+// --- rendimiento: 1000 steps ---
+let perfMsg = '';
+{
+  let grid = createGrid();
+  // patrón caótico para no morir rápido: r-pentomino
+  stamp(grid, [[1, 0], [2, 0], [0, 1], [1, 1], [1, 2]], 20, 10);
+  let age;
+  const N = 1000;
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) {
+    ({ grid, age } = step(grid, age));
+  }
+  const t1 = performance.now();
+  const totalMs = t1 - t0;
+  const perStepMs = totalMs / N;
+  perfMsg = `${N} steps en ${totalMs.toFixed(2)} ms (${perStepMs.toFixed(4)} ms/step)`;
+  assert(perStepMs < 0.2, `rendimiento: promedio por step < 0.2 ms (${perfMsg})`);
+}
+
+// --- render resultado ---
+const out = document.getElementById('out');
+const allPassed = failures === 0;
+const header = allPassed ? 'ALL TESTS PASSED' : `${failures} TEST(S) FAILED`;
+out.innerHTML = '';
+const h = document.createElement('div');
+h.className = allPassed ? 'pass' : 'fail';
+h.style.fontWeight = 'bold';
+h.style.fontSize = '1.3em';
+h.textContent = header;
+out.appendChild(h);
+const perfDiv = document.createElement('div');
+perfDiv.textContent = perfMsg;
+out.appendChild(perfDiv);
+for (const line of lines) {
+  const d = document.createElement('div');
+  d.className = line.startsWith('FAIL') ? 'fail' : 'pass';
+  d.textContent = line;
+  out.appendChild(d);
+}
+
+console.log(header);
+console.log(perfMsg);
+for (const line of lines) {
+  if (line.startsWith('FAIL')) console.error(line); else console.log(line);
+}
+</script>
+</body>
+</html>
