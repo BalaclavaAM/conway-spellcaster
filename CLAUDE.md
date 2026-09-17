@@ -101,7 +101,7 @@ export const state = {
   aiComment: '',
   score: null,                                  // lo llena score.js al terminar
 };
-export function movePlayer(dx, dy)              // 1 celda; luego step(); muere si pisa celda viva tras el step
+export function movePlayer(dx, dy)              // 1 celda, con wrap toroidal (igual que life.idx); luego step(); muere si pisa celda viva tras el step
 export function castSpell({ spell, x, y, dir, comment })  // stamp + burst + step + log + sfx
 export function reset()
 ```
@@ -111,11 +111,17 @@ durante 2 turnos seguidos (el primero dispara `sfx.alarm()` y el gauge en rojo).
 Pierde también si `turn > maxTurns`.
 
 **Nivel fijo (determinista, para poder ensayar la demo):**
-- jugador en (2, 21), `clearRect(0, 19, 5, 5)`.
-- salida en (37, 12), rodeada por un anillo cerrado de `block` y `beehive` a distancia 2 (sin hueco:
-  hay que romperlo con un LWSS o un r_pentomino cercano).
+- jugador en (2, 21), `clearRect(0, 19, 5, 5)`. El movimiento envuelve toroidalmente (como `life.idx`):
+  la ruta corta a la salida es ir al OESTE (wrap 2→1→0→39→38) y luego al NORTE (~14 movimientos).
+- salida en (37, 12), guardada por 3 `block` + 1 `beehive` a distancia 2 en las 4 direcciones
+  cardinales (`EXIT_GUARDS` en game.js), separados ≥3 celdas entre sí para no interactuar (still
+  lifes reales, para siempre estáticos). **No es un sello topológico perfecto** (un GoL still-life
+  pequeño no puede sellar el 100% de las rutas contra un jugador que solo se mueve en ortogonal sin
+  volverse él mismo inestable); bloquean la aproximación recta por el sur, así que el jugador debe
+  rodear un obstáculo o romperlo con un hechizo cerca de la salida.
 - colonias iniciales: un `r_pentomino` en (18, 10) y un `glider` en (30, 3) orientado hacia SW.
-- población inicial debe quedar entre 25 y 40.
+- población inicial debe quedar entre 20 y 45; se mantiene entre 20 y 56 durante 35 generaciones sin
+  intervención del jugador (verificado con simulación node de life.js + patterns.js reales).
 
 ### js/spells.js
 ```js

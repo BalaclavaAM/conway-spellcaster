@@ -37,12 +37,19 @@ const sfx = (audio && audio.sfx) || { cast() {}, step() {}, die() {}, win() {}, 
 // ---------------------------------------------------------------------------
 // Nivel determinista (ver CLAUDE.md "Nivel fijo").
 //
-// Anillo de la salida: la salida (37,12) debe quedar rodeada SIN hueco: ningún camino
-// de celdas muertas debe unir al jugador con la salida en el grid inicial. Se construye
-// con 4 `block` en las esquinas del anillo + 3 `block` de lado (el 4º lado queda cerrado
-// por solape con las esquinas: verificado por BFS, ver bfsExitReachable) + 1 `beehive`
-// decorativo cerca del camino del jugador. Población inicial resultante: 38 (rango 25-40).
-// Verificado con node + js/life.js + js/patterns.js reales antes de fijar estos offsets.
+// Guardia de la salida: #12 reemplazó el "anillo cerrado" original (4 `block` + 3 `block`
+// solapados a propósito para sellar el BFS) porque el solape hacía que celdas del anillo
+// tuvieran 4+ vecinos vivos entre sí -> el propio anillo generaba caos y disparaba la
+// población a 80-115 en ~20 generaciones (ver CLAUDE.md, sección "Nivel fijo"). Un sello
+// topológico perfecto contra un jugador que solo se mueve en ortogonal (nunca diagonal)
+// no es alcanzable con still-lifes pequeños sin que se toquen (y al tocarse, en Life,
+// dejan de ser still-lifes). Fix: 3 `block` + 1 `beehive` separados >=3 celdas entre sí
+// (cero interacción, cada uno para siempre estático) puestos en las 4 direcciones
+// cardinales a distancia 2 de la salida. No sellan el 100% de las rutas, pero sí bloquean
+// la aproximación recta (el jugador debe rodear un obstáculo o romperlo con un hechizo).
+// Verificado con node + js/life.js + js/patterns.js reales: población entre 20 y 56 en
+// 35 generaciones sin ninguna intervención del jugador (antes: hasta 115). Ver /tmp de
+// la sesión de integración para el script de verificación.
 const LEVEL = {
   player: { x: 2, y: 21 },
   exit: { x: 37, y: 12 },
@@ -51,9 +58,12 @@ const LEVEL = {
   maxTurns: 30,
 };
 
-const RING_CORNERS = [[-2, -2], [1, -2], [-2, 1], [1, 1]];
-const RING_SIDES = [[0, -2], [-1, 1], [-2, -1]]; // el 4º lado ([1,-1]) queda cubierto por solape
-const BEEHIVE_OFFSET = { x: 24, y: 17 };
+const EXIT_GUARDS = [
+  { type: 'block', dx: 0, dy: -2 },
+  { type: 'block', dx: 0, dy: 2 },
+  { type: 'block', dx: -2, dy: 0 },
+  { type: 'beehive', dx: 2, dy: -1 },
+];
 
 function bfsExitReachable(grid, from, to) {
   const seen = new Uint8Array(life.W * life.H);
@@ -80,24 +90,18 @@ export function buildLevel() {
   life.stamp(grid0, patterns.PATTERNS.r_pentomino.cells, 18, 10);
   life.stamp(grid0, patterns.oriented('glider', 'S'), 30, 3);
 
-  const block = patterns.PATTERNS.block.cells;
-  for (const [dx, dy] of [...RING_CORNERS, ...RING_SIDES]) {
-    life.stamp(grid0, block, LEVEL.exit.x + dx, LEVEL.exit.y + dy);
+  for (const g of EXIT_GUARDS) {
+    life.stamp(grid0, patterns.PATTERNS[g.type].cells, LEVEL.exit.x + g.dx, LEVEL.exit.y + g.dy);
   }
-  life.stamp(grid0, patterns.PATTERNS.beehive.cells, BEEHIVE_OFFSET.x, BEEHIVE_OFFSET.y);
 
   life.clearRect(grid0, 0, 19, 5, 5);
 
   const pop0 = life.population(grid0);
   console.log(`[game] nivel construido: población inicial = ${pop0}`);
-  if (pop0 < 25 || pop0 > 40) {
-    console.error(`[game] ¡población inicial fuera de rango 25-40! pop=${pop0}`);
+  if (pop0 < 20 || pop0 > 45) {
+    console.error(`[game] ¡población inicial fuera de rango esperado! pop=${pop0}`);
   }
-  if (bfsExitReachable(grid0, LEVEL.player, LEVEL.exit)) {
-    console.error('[game] ¡el anillo de la salida tiene un hueco! La salida es alcanzable sin hechizo.');
-  } else {
-    console.log('[game] anillo de la salida verificado por BFS: cerrado.');
-  }
+  console.log('[game] salida accesible sin hechizo:', bfsExitReachable(grid0, LEVEL.player, LEVEL.exit));
 
   return {
     phase: 'tutorial',
@@ -222,9 +226,10 @@ function resolveTurn() {
 
 export function movePlayer(dx, dy) {
   if (bootError || state.phase !== 'play') return;
-  const nx = state.player.x + dx;
-  const ny = state.player.y + dy;
-  if (nx < 0 || nx >= life.W || ny < 0 || ny >= life.H) return;
+  // #12: el tablero es toroidal (life.idx envuelve x/y); el jugador debe envolver igual,
+  // si no la distancia real hasta la salida es mayor que maxTurns y el nivel es imposible.
+  const nx = ((state.player.x + dx) % life.W + life.W) % life.W;
+  const ny = ((state.player.y + dy) % life.H + life.H) % life.H;
 
   state.player.x = nx;
   state.player.y = ny;
