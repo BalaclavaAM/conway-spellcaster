@@ -26,6 +26,7 @@ body {
   text-shadow: 0 0 6px var(--cyan-dim);
   letter-spacing: 0.03em;
   white-space: nowrap;
+  animation: ui-title-neon 3s ease-in-out infinite, ui-title-flicker 7s linear infinite;
 }
 
 .hud-stats {
@@ -37,6 +38,19 @@ body {
 }
 
 .hud-stats span { color: var(--cyan); }
+
+.hud-turn.ui-turn-warn, .hud-turn.ui-turn-warn span {
+  color: var(--yellow);
+  animation: ui-turn-blink 1s ease-in-out infinite;
+}
+.hud-turn.ui-turn-danger, .hud-turn.ui-turn-danger span {
+  color: var(--red);
+  animation: ui-turn-blink 0.5s ease-in-out infinite;
+}
+@keyframes ui-turn-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
 
 #app {
   flex: 1 1 auto;
@@ -91,6 +105,15 @@ body {
 }
 
 #overlay:empty { display: none; }
+
+/* entrada del overlay (tutorial/score/modal API): anima el primer hijo, sin tocar sus módulos */
+#overlay > * {
+  animation: overlay-in 220ms ease-out;
+}
+@keyframes overlay-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
 
 @media (max-width: 900px) {
   .hud-stats { font-size: 0.75em; gap: 0.9em; }

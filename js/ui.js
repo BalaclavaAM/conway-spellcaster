@@ -17,6 +17,17 @@ const LOG_SIZE = 8;
 const TYPE_SPEED_MS = 20;
 
 let els = null;
+let keydownHandler = null;
+
+// Reinicia una animación CSS por clase (útil cuando el mismo valor cambia varias
+// veces seguidas y el className no cambia entre renders).
+function pulse(el, cls, durationMs) {
+  if (!el) return;
+  el.classList.remove(cls);
+  void el.offsetWidth; // fuerza reflow para reiniciar la animación
+  el.classList.add(cls);
+  window.setTimeout(() => el.classList.remove(cls), durationMs);
+}
 
 async function loadPatterns() {
   try {
@@ -46,19 +57,36 @@ function injectStyles() {
     .ui-log-line--cast { color: var(--cyan, #19e6ff); }
     .ui-log-line--ai { color: var(--orange, #ff7a1a); }
     .ui-log-line--sys { color: #7a8494; }
+    @keyframes ui-line-in { from { transform: translateX(-8px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+    .ui-log-line--enter { animation: ui-line-in 180ms ease-out; }
+    @keyframes ui-ai-glow-in { 0% { text-shadow: 0 0 10px var(--orange, #ff7a1a), 0 0 4px var(--orange, #ff7a1a); } 100% { text-shadow: none; } }
+    .ui-log-line--enter.ui-log-line--ai { animation: ui-line-in 180ms ease-out, ui-ai-glow-in 600ms ease-out; }
 
     .ui-console-input-wrap { position: relative; margin-top: 8px; }
     .ui-console-input {
       width: 100%; resize: none; background: transparent;
       border: 1px solid var(--border, #2a3140); color: var(--white, #eafcff);
       padding: 6px; font-size: 0.9em; font-family: inherit;
+      transition: border-color 150ms ease, box-shadow 150ms ease;
     }
     .ui-console-input:disabled { opacity: 0.4; }
+    .ui-console-input:focus {
+      border-color: var(--cyan, #19e6ff);
+      box-shadow: 0 0 8px var(--cyan-dim, #0a6b78);
+      outline: none;
+    }
     .ui-console-status {
       position: absolute; inset: 0; display: flex; align-items: center;
       padding: 6px; color: var(--cyan, #19e6ff); background: var(--panel, #0a0c10);
     }
     .ui-console-status[hidden] { display: none; }
+    .ui-console-status-text {
+      background: linear-gradient(90deg, var(--cyan, #19e6ff) 0%, var(--white, #eafcff) 50%, var(--cyan, #19e6ff) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: ui-shimmer-text 1.2s linear infinite;
+    }
+    @keyframes ui-shimmer-text { 0% { background-position: 200% 0; } 100% { background-position: 0% 0; } }
     .ui-caret { margin-left: 2px; animation: ui-blink 1s step-end infinite; }
     @keyframes ui-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
@@ -73,12 +101,22 @@ function injectStyles() {
     }
     .ui-gauge-track--alarm { animation: ui-alarm-blink 0.5s steps(1) infinite; }
     @keyframes ui-alarm-blink { 0%, 49% { border-color: var(--red, #ff3b3b); } 50%, 100% { border-color: var(--border, #2a3140); } }
+    .ui-gauge-track::after {
+      content: ''; position: absolute; inset: 0; pointer-events: none;
+      background: linear-gradient(120deg, transparent 30%, rgba(255,255,255,0.28) 50%, transparent 70%);
+      background-size: 220% 220%; mix-blend-mode: overlay;
+      animation: ui-gauge-shimmer 3s linear infinite;
+    }
+    @keyframes ui-gauge-shimmer { 0% { background-position: 0% 0%; } 100% { background-position: 100% 100%; } }
     .ui-gauge-needle {
       position: absolute; left: 100%; margin-left: 4px; white-space: nowrap;
       transform: translateY(50%); transition: bottom 300ms ease;
       font-size: 0.85em; color: var(--white, #eafcff);
     }
     .ui-gauge-needle--danger { color: var(--red, #ff3b3b); }
+    .ui-gauge-value, #turn { display: inline-block; }
+    @keyframes ui-tick-pop { 0% { transform: scale(1.25); } 100% { transform: scale(1); } }
+    .ui-gauge-value--tick, #turn.ui-tick { animation: ui-tick-pop 150ms ease-out; }
     .ui-gauge-labels { position: relative; font-size: 0.72em; }
     .ui-gauge-label { position: absolute; left: 0; transform: translateY(50%); white-space: nowrap; }
     .ui-gauge-label--over { color: var(--red, #ff3b3b); }
@@ -86,6 +124,8 @@ function injectStyles() {
     .ui-gauge-label--under { color: var(--red, #ff3b3b); }
 
     .ui-ai-comment { min-height: 2.4em; color: var(--orange, #ff7a1a); font-size: 0.85em; margin: 0; }
+    @keyframes ui-box-flash { 0% { box-shadow: 0 0 12px var(--orange, #ff7a1a); } 100% { box-shadow: none; } }
+    .ui-ai-flash { animation: ui-box-flash 500ms ease-out; }
 
     .ui-grimoire { display: flex; gap: 4px; justify-content: space-between; }
     .ui-spell-icon {
@@ -93,7 +133,18 @@ function injectStyles() {
       width: 44px; height: 44px;
       background: transparent; border: 1px solid var(--border, #2a3140);
       padding: 2px; cursor: pointer; color: var(--cyan, #19e6ff);
+      transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
     }
+    .ui-spell-icon:hover, .ui-spell-icon:focus-visible {
+      transform: translateY(-2px); border-color: var(--cyan, #19e6ff); outline: none;
+      box-shadow: 0 0 10px var(--cyan, #19e6ff), 0 0 4px var(--cyan-dim, #0a6b78);
+    }
+    @keyframes ui-press {
+      0% { transform: scale(0.9); box-shadow: 0 0 0 rgba(0,0,0,0); }
+      45% { transform: scale(1.08); box-shadow: 0 0 16px var(--cyan, #19e6ff), 0 0 26px var(--cyan-dim, #0a6b78); }
+      100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+    }
+    .ui-spell-icon.ui-press { animation: ui-press 220ms ease-out; }
     .ui-spell-icon-glyph {
       width: 28px; height: 28px; line-height: 28px; text-align: center;
       color: var(--cyan, #19e6ff); filter: drop-shadow(0 0 4px var(--cyan, #19e6ff));
@@ -108,6 +159,14 @@ function injectStyles() {
       border: 1px solid var(--border, #2a3140); color: var(--white, #eafcff); font-family: inherit;
     }
     .ui-api-modal a { display: block; margin-top: 10px; font-size: 0.8em; color: var(--cyan-dim, #0a6b78); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .ui-log-line--enter, .ui-gauge-track::after, .ui-gauge-value--tick, #turn.ui-tick,
+      .ui-ai-flash, .ui-spell-icon.ui-press, .ui-console-status-text, .ui-caret {
+        animation: none !important;
+      }
+      .ui-spell-icon, .ui-console-input { transition: none !important; }
+    }
   `;
   document.head.appendChild(style);
 }
@@ -137,7 +196,7 @@ export async function mountUI(root, { onSpell, onKey } = {}) {
   const status = document.createElement('div');
   status.className = 'ui-console-status';
   status.hidden = true;
-  status.innerHTML = 'casting<span class="ui-caret">_</span>';
+  status.innerHTML = '<span class="ui-console-status-text">casting</span><span class="ui-caret">_</span>';
   const inputWrap = document.createElement('div');
   inputWrap.className = 'ui-console-input-wrap';
   inputWrap.append(textarea, status);
@@ -227,8 +286,14 @@ export async function mountUI(root, { onSpell, onKey } = {}) {
     gen: document.getElementById('gen'),
     turn: document.getElementById('turn'),
     maxturn: document.getElementById('maxturn'),
+    hudTurn: document.querySelector('.hud-turn'),
+    gaugeBoxEl: gaugeBox.el,
+    aiBoxEl: aiBox.el,
+    spellButtons: [],
     typeTimer: null,
     lastAiComment: '',
+    lastLogLen: 0,
+    lastPopValue: undefined,
   };
 
   const { PATTERNS, SPELL_IDS } = await loadPatterns();
@@ -258,9 +323,31 @@ export async function mountUI(root, { onSpell, onKey } = {}) {
     keyLabel.textContent = key;
 
     btn.append(icon, keyLabel);
-    btn.addEventListener('click', () => onKey?.(key));
+    btn.addEventListener('click', () => {
+      flashSpell(i);
+      onKey?.(key);
+    });
     grimoire.appendChild(btn);
+    els.spellButtons.push(btn);
   });
+
+  if (keydownHandler) window.removeEventListener('keydown', keydownHandler);
+  keydownHandler = (e) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    if (e.key >= '1' && e.key <= '7') {
+      flashSpell(Number(e.key) - 1);
+    }
+  };
+  window.addEventListener('keydown', keydownHandler);
+}
+
+// Solo reproduce la animación del botón (0..6); el disparo real de la acción
+// lo hace game.js/spells.js por su propio listener de teclado.
+export function flashSpell(index) {
+  const btn = els?.spellButtons?.[index];
+  if (!btn) return;
+  pulse(btn, 'ui-press', 220);
 }
 
 function pct(n) {
@@ -279,9 +366,15 @@ function updateGauge(state) {
     var(--green, #35ff8a) ${popMin}%, var(--green, #35ff8a) ${popMax}%,
     var(--red, #ff3b3b) ${popMax}%, var(--red, #ff3b3b) 100%)`;
   els.track.classList.toggle('ui-gauge-track--alarm', outOfRange);
+  els.gaugeBoxEl?.classList.toggle('danger', outOfRange);
 
   els.needle.style.bottom = `${clampedPop}%`;
-  els.needleValue.textContent = String(Math.round(pop));
+  const roundedPop = Math.round(pop);
+  if (els.lastPopValue !== undefined && els.lastPopValue !== roundedPop) {
+    pulse(els.needleValue, 'ui-gauge-value--tick', 150);
+  }
+  els.lastPopValue = roundedPop;
+  els.needleValue.textContent = String(roundedPop);
   els.needle.classList.toggle('ui-gauge-needle--danger', outOfRange);
 
   els.labelOver.style.bottom = `${popMax + (100 - popMax) / 2}%`;
@@ -291,18 +384,22 @@ function updateGauge(state) {
 
 function updateLog(log = []) {
   const entries = log.slice(-LOG_SIZE);
+  const startGlobalIndex = log.length - entries.length;
   els.logLines.forEach((line, i) => {
     const entry = entries[i];
     if (!entry) {
       line.hidden = true;
       line.textContent = '';
+      line.className = 'ui-log-line';
       return;
     }
     const kind = entry.kind || 'sys';
+    const isNew = startGlobalIndex + i >= els.lastLogLen;
     line.hidden = false;
     line.textContent = kind === 'cast' ? `> ${entry.text}` : entry.text;
-    line.className = `ui-log-line ui-log-line--${kind}`;
+    line.className = `ui-log-line ui-log-line--${kind}${isNew ? ' ui-log-line--enter' : ''}`;
   });
+  els.lastLogLen = log.length;
 }
 
 function updateAiComment(comment = '') {
@@ -312,15 +409,21 @@ function updateAiComment(comment = '') {
     clearInterval(els.typeTimer);
     els.typeTimer = null;
   }
-  els.aiComment.textContent = '';
+  els.aiComment.innerHTML = '';
   if (!comment) return;
+  pulse(els.aiBoxEl, 'ui-ai-flash', 500);
+  const cursor = document.createElement('span');
+  cursor.className = 'ui-caret';
+  cursor.textContent = '▌';
+  els.aiComment.appendChild(cursor);
   let i = 0;
   els.typeTimer = setInterval(() => {
-    els.aiComment.textContent += comment[i];
+    cursor.insertAdjacentText('beforebegin', comment[i]);
     i += 1;
     if (i >= comment.length) {
       clearInterval(els.typeTimer);
       els.typeTimer = null;
+      cursor.remove();
     }
   }, TYPE_SPEED_MS);
 }
@@ -328,8 +431,19 @@ function updateAiComment(comment = '') {
 export function updateUI(state) {
   if (!els || !state) return;
   if (els.gen && state.gen != null) els.gen.textContent = String(state.gen);
-  if (els.turn && state.turn != null) els.turn.textContent = String(state.turn);
+  if (els.turn && state.turn != null) {
+    const turnStr = String(state.turn);
+    if (els.turn.textContent !== turnStr) {
+      els.turn.textContent = turnStr;
+      pulse(els.turn, 'ui-tick', 150);
+    }
+  }
   if (els.maxturn && state.maxTurns != null) els.maxturn.textContent = String(state.maxTurns);
+  if (els.hudTurn && state.turn != null && state.maxTurns != null) {
+    const remaining = state.maxTurns - state.turn;
+    els.hudTurn.classList.toggle('ui-turn-danger', remaining <= 2);
+    els.hudTurn.classList.toggle('ui-turn-warn', remaining > 2 && remaining <= 5);
+  }
   updateGauge(state);
   updateLog(state.log);
   updateAiComment(state.aiComment);
