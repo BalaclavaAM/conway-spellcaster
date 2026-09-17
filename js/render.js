@@ -37,6 +37,21 @@ const HERO_FRAME = { idle: 0, walk: 2, cast: 4, dead: 6, win: 7 };
 const HERO_ANIM_MS = { idle: 500, walk: 120, cast: 90 };
 const HERO_ACTION_HOLD = { walk: 260, cast: 400 };
 
+// #render-polish: timings de las animaciones nuevas, todas dentro del rAF único.
+const POP_IN_MS = 140;          // pop-in de celdas recién nacidas (age===1)
+const HERO_SQUASH_MS = 90;      // squash del héroe al moverse
+const HERO_TRAIL_MS = 250;      // vida del trail del héroe
+const SCAN_PERIOD_MS = 4000;    // periodo del scanline horizontal
+const RADAR_PERIOD_MS = 1200;   // periodo del anillo radar en la salida
+const CONFETTI_DURATION_MS = 2000;
+const CONFETTI_INTERVAL_MS = 150;
+
+// easeOutBack suavizado (c1 bajo = menos overshoot) para el pop-in.
+function easeOutBackSoft(x) {
+  const c1 = 1.15, c3 = c1 + 1;
+  return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2);
+}
+
 export class Renderer {
   constructor(canvas) {
     this.canvas = canvas;
@@ -47,6 +62,8 @@ export class Renderer {
     this.state = null;
     this._prevPlayer = null;
     this._prevSpellsCast = 0;
+    this._prevGen = null;
+    this._prevPhase = null;
     this._action = 'idle';
     this._actionExpire = 0;
 
@@ -55,6 +72,20 @@ export class Renderer {
     this.cellSize = 0;
     this.sprites = {};
     this._vignetteGradient = null;
+    this._scanGradient = null;
+    this._rgbCache = {};
+
+    // #render-polish: step timing (pop-in), shake, flash, trail del héroe, confeti
+    this._stepAt = 0;
+    this._shakeStart = -Infinity;
+    this._shakeMs = 0;
+    this._shakeIntensity = 0;
+    this._flashState = null;
+    this._heroMoveAt = -Infinity;
+    this._heroTrail = [];
+    this._confettiUntil = 0;
+    this._confettiNextFire = 0;
+    this._confettiIdx = 0;
 
     this.particles = [];
 
@@ -149,6 +180,7 @@ export class Renderer {
     if (changed) {
       this._buildSprites();
       this._buildVignette();
+      this._buildScanGradient();
     }
   }
 
@@ -196,18 +228,71 @@ export class Renderer {
     this._vignetteGradient = g;
   }
 
+  _buildScanGradient() {
+    const w = this.cssW;
+    const [r, gC, b] = this._hexToRgb(this.theme.cyan);
+    const g = this.ctx.createLinearGradient(0, 0, w, 0);
+    g.addColorStop(0, `rgba(${r},${gC},${b},0)`);
+    g.addColorStop(0.5, `rgba(${r},${gC},${b},0.06)`);
+    g.addColorStop(1, `rgba(${r},${gC},${b},0)`);
+    this._scanGradient = g;
+  }
+
+  // ---------- color helpers (cachean el parseo hex, cero allocación por frame) ----------
+  _hexToRgb(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex || '');
+    return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [255, 255, 255];
+  }
+
+  _rgba(colorName, alpha) {
+    let rgb = this._rgbCache[colorName];
+    if (!rgb) {
+      rgb = this._hexToRgb(this.theme[colorName] || colorName);
+      this._rgbCache[colorName] = rgb;
+    }
+    return `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
+  }
+
   // ---------- API pública ----------
   setState(state) {
+    const now = performance.now();
+
+    // #render-polish: cada step (mover o castear) dispara el pop-in de las celdas nuevas
+    if (state && state.gen !== this._prevGen) {
+      this._stepAt = now;
+      this._prevGen = state.gen;
+    }
+
     if (state && state.player) {
-      if (this._prevPlayer && (this._prevPlayer.x !== state.player.x || this._prevPlayer.y !== state.player.y)) {
+      const moved = !!(this._prevPlayer && (this._prevPlayer.x !== state.player.x || this._prevPlayer.y !== state.player.y));
+      if (moved) {
         this._action = 'walk';
-        this._actionExpire = performance.now() + HERO_ACTION_HOLD.walk;
+        this._actionExpire = now + HERO_ACTION_HOLD.walk;
+        this._heroMoveAt = now;
+        this._heroTrail.push({ x: this._prevPlayer.x, y: this._prevPlayer.y, t: now });
+        if (this._heroTrail.length > 3) this._heroTrail.shift();
+        this._footParticles(this._prevPlayer.x, this._prevPlayer.y);
       } else if ((state.spellsCast || 0) > this._prevSpellsCast) {
         this._action = 'cast';
-        this._actionExpire = performance.now() + HERO_ACTION_HOLD.cast;
+        this._actionExpire = now + HERO_ACTION_HOLD.cast;
+        this.shake(3, 160);
+        this.flash('cyan', 120, 0.18);
       }
       this._prevPlayer = { x: state.player.x, y: state.player.y };
       this._prevSpellsCast = state.spellsCast || 0;
+    }
+
+    if (state && state.phase !== this._prevPhase) {
+      if (state.phase === 'dead') {
+        this.shake(8, 400);
+        this.flash('red', 300, 0.35);
+      } else if (state.phase === 'won') {
+        this.flash('green', 400, 0.25);
+        this._confettiUntil = now + CONFETTI_DURATION_MS;
+        this._confettiNextFire = now;
+        this._confettiIdx = 0;
+      }
+      this._prevPhase = state.phase;
     }
 
     if (state && state.grid && state.prevGrid && state.grid.length === state.prevGrid.length) {
@@ -223,18 +308,43 @@ export class Renderer {
     const cx = (x + 0.5) * this.cellSize;
     const cy = (y + 0.5) * this.cellSize;
     const fill = this.theme[color] || color || this.theme.cyan;
-    for (let k = 0; k < 24; k++) {
+    this._spawnParticles(cx, cy, fill, { count: 24, speedMin: 60, speedMax: 210, life: 300, sizeMin: 1.5, sizeMax: 3.5 });
+  }
+
+  // pies del héroe al moverse: mismo sistema de partículas, más chicas y cortas.
+  _footParticles(x, y) {
+    if (!this.cellSize) return;
+    const cell = this.cellSize;
+    const cx = x * cell + cell / 2;
+    const cy = y * cell + cell * 0.85;
+    this._spawnParticles(cx, cy, this.theme.orange, { count: 6, speedMin: 15, speedMax: 60, life: 200, sizeMin: 1, sizeMax: 1.8 });
+  }
+
+  _spawnParticles(cx, cy, color, { count, speedMin, speedMax, life, sizeMin, sizeMax }) {
+    for (let k = 0; k < count; k++) {
       const angle = Math.random() * Math.PI * 2;
-      const speed = 60 + Math.random() * 150;
+      const speed = speedMin + Math.random() * (speedMax - speedMin);
       this.particles.push({
         x: cx, y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        age: 0, life: 300,
-        color: fill,
-        size: 1.5 + Math.random() * 2,
+        age: 0, life,
+        color,
+        size: sizeMin + Math.random() * (sizeMax - sizeMin),
       });
     }
+  }
+
+  // screen shake: offset aleatorio decreciente aplicado una vez al inicio del frame.
+  shake(intensity = 4, ms = 180) {
+    this._shakeStart = performance.now();
+    this._shakeMs = ms;
+    this._shakeIntensity = intensity;
+  }
+
+  // flash de pantalla completa, alpha decreciente lineal.
+  flash(color, ms = 200, maxAlpha = 0.25) {
+    this._flashState = { color, start: performance.now(), ms, maxAlpha };
   }
 
   start() {
@@ -273,20 +383,58 @@ export class Renderer {
     ctx.fillStyle = t.bg;
     ctx.fillRect(0, 0, w, h);
 
+    // el shake solo desplaza el contenido, no el fondo ya pintado -> sin ghosting en los bordes.
+    ctx.save();
+    this._applyShake(ctx, now);
+
     this._drawGrid(ctx, w, h, cell, t);
+    if (state) this._drawDangerGrid(ctx, w, h, cell, now, state);
+    this._drawScanLine(ctx, w, h, now);
 
     if (state) {
-      this._drawCells(ctx, state, cell);
+      this._drawCells(ctx, state, cell, now);
       this._drawExit(ctx, state, cell, now, t);
+      this._drawHeroTrail(ctx, cell, now);
       this._drawHero(ctx, state, cell, now);
     }
 
     this._updateAndDrawParticles(ctx, dt);
 
     if (state) this._drawDanger(ctx, state, w, h, now);
+    this._drawFlash(ctx, w, h, now);
+
+    ctx.restore();
+
+    if (state) this._updateConfetti(state, now);
 
     this._updateFps(now);
     if (this.showFps) this._drawFps(ctx, t);
+  }
+
+  _applyShake(ctx, now) {
+    const elapsed = now - this._shakeStart;
+    if (elapsed >= this._shakeMs) return;
+    const amp = this._shakeIntensity * (1 - elapsed / this._shakeMs);
+    ctx.translate((Math.random() * 2 - 1) * amp, (Math.random() * 2 - 1) * amp);
+  }
+
+  _drawFlash(ctx, w, h, now) {
+    const f = this._flashState;
+    if (!f) return;
+    const elapsed = now - f.start;
+    if (elapsed >= f.ms) { this._flashState = null; return; }
+    ctx.fillStyle = this._rgba(f.color, f.maxAlpha * (1 - elapsed / f.ms));
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  _updateConfetti(state, now) {
+    if (now >= this._confettiUntil || now < this._confettiNextFire) return;
+    const exit = state.exit;
+    if (!exit) return;
+    const palette = ['green', 'white', 'cyan'];
+    this.burst(exit.x, exit.y, palette[this._confettiIdx % palette.length]);
+    this._confettiIdx++;
+    this._confettiNextFire = now + CONFETTI_INTERVAL_MS;
   }
 
   _drawGrid(ctx, w, h, cell, t) {
@@ -306,29 +454,78 @@ export class Renderer {
     ctx.stroke();
   }
 
-  _drawCells(ctx, state, cell) {
+  // gridlines rojas parpadeando a 2 Hz cuando la población está fuera de rango (o venimos de estarlo).
+  _drawDangerGrid(ctx, w, h, cell, now, state) {
+    if (state.pop == null || state.popMin == null || state.popMax == null) return;
+    const outOfRange = state.pop < state.popMin || state.pop > state.popMax;
+    if (!outOfRange && !(state.outOfRangeStreak > 0)) return;
+    if (Math.floor(now / 250) % 2 !== 0) return; // 2 Hz: medio ciclo encendido, medio apagado
+    ctx.strokeStyle = this._rgba('red', 0.15);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let x = 0; x <= W; x++) {
+      const px = Math.round(x * cell) + 0.5;
+      ctx.moveTo(px, 0);
+      ctx.lineTo(px, h);
+    }
+    for (let y = 0; y <= H; y++) {
+      const py = Math.round(y * cell) + 0.5;
+      ctx.moveTo(0, py);
+      ctx.lineTo(w, py);
+    }
+    ctx.stroke();
+  }
+
+  // scanline horizontal sutil, un solo fillRect por frame (barato).
+  _drawScanLine(ctx, w, h, now) {
+    if (!this._scanGradient) return;
+    const phase = (now % SCAN_PERIOD_MS) / SCAN_PERIOD_MS;
+    ctx.fillStyle = this._scanGradient;
+    ctx.fillRect(0, phase * h, w, 2);
+  }
+
+  _drawCells(ctx, state, cell, now) {
     const { grid, age } = state;
     if (!grid) return;
     const sprites = this.sprites;
+    const stepElapsed = now - this._stepAt;
+    const popInActive = stepElapsed >= 0 && stepElapsed < POP_IN_MS;
+    const popInScale = popInActive ? 0.55 + 0.45 * easeOutBackSoft(stepElapsed / POP_IN_MS) : 1;
     for (let y = 0; y < H; y++) {
       const row = y * W;
       for (let x = 0; x < W; x++) {
         const i = row + x;
         if (grid[i] === 1) {
-          const sp = (age && age[i] === 1) ? sprites.white : sprites.cyan;
+          const isNew = age && age[i] === 1;
+          const sp = isNew ? sprites.white : sprites.cyan;
           if (!sp) continue;
-          ctx.drawImage(sp.canvas, x * cell - sp.pad, y * cell - sp.pad, cell + sp.pad * 2, cell + sp.pad * 2);
+          if (isNew && popInActive) {
+            this._drawSpriteScaled(ctx, sp, x, y, cell, popInScale, 1);
+          } else {
+            ctx.drawImage(sp.canvas, x * cell - sp.pad, y * cell - sp.pad, cell + sp.pad * 2, cell + sp.pad * 2);
+          }
         } else if (this.fade[i] > 0) {
           const sp = sprites.magenta;
           if (sp) {
-            ctx.globalAlpha = Math.min(1, this.fade[i] / FADE_FRAMES);
-            ctx.drawImage(sp.canvas, x * cell - sp.pad, y * cell - sp.pad, cell + sp.pad * 2, cell + sp.pad * 2);
-            ctx.globalAlpha = 1;
+            const ratio = this.fade[i] / FADE_FRAMES;
+            // implosión: la celda que muere encoge de 1.0 a 0.7 mientras se desvanece.
+            this._drawSpriteScaled(ctx, sp, x, y, cell, 0.7 + 0.3 * ratio, Math.min(1, ratio));
           }
           this.fade[i] -= 1;
         }
       }
     }
+  }
+
+  _drawSpriteScaled(ctx, sp, x, y, cell, scale, alpha) {
+    const cx = x * cell + cell / 2, cy = y * cell + cell / 2;
+    ctx.globalAlpha = alpha;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.drawImage(sp.canvas, -cell / 2 - sp.pad, -cell / 2 - sp.pad, cell + sp.pad * 2, cell + sp.pad * 2);
+    ctx.restore();
+    ctx.globalAlpha = 1;
   }
 
   _drawExit(ctx, state, cell, now, t) {
@@ -342,6 +539,17 @@ export class Renderer {
       ctx.drawImage(sp.canvas, px - sp.pad, py - sp.pad, cell + sp.pad * 2, cell + sp.pad * 2);
       ctx.globalAlpha = 1;
     }
+
+    // anillo de radar: se expande y desvanece, un ciclo cada 1.2s.
+    const rp = (now % RADAR_PERIOD_MS) / RADAR_PERIOD_MS;
+    ctx.globalAlpha = 0.5 * (1 - rp);
+    ctx.strokeStyle = t.green;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(px + cell / 2, py + cell / 2, cell * (0.5 + 1.3 * rp), 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
     ctx.fillStyle = t.green;
     ctx.font = `${Math.max(8, cell * 0.85)}px ${t.fontPixel}`;
     ctx.textAlign = 'center';
@@ -349,6 +557,18 @@ export class Renderer {
     ctx.globalAlpha = 0.6 + 0.4 * pulse;
     ctx.fillText('>', px + cell / 2, py + cell / 2 + cell * 0.05);
     ctx.globalAlpha = 1;
+  }
+
+  // trail: últimas 3 posiciones del héroe, cuadrado naranja translúcido que se desvanece.
+  _drawHeroTrail(ctx, cell, now) {
+    const trail = this._heroTrail;
+    for (let k = 0; k < trail.length; k++) {
+      const p = trail[k];
+      const age = now - p.t;
+      if (age < 0 || age >= HERO_TRAIL_MS) continue;
+      ctx.fillStyle = this._rgba('orange', 0.25 * (1 - age / HERO_TRAIL_MS));
+      ctx.fillRect(p.x * cell, p.y * cell, cell, cell);
+    }
   }
 
   _drawHero(ctx, state, cell, now) {
@@ -366,6 +586,20 @@ export class Renderer {
     const cy = p.y * cell + cell / 2 + bob;
     const px = cx - size / 2;
     const py = cy - size / 2;
+
+    // squash al moverse: X 1.15 / Y 0.85 -> vuelve a 1,1 en 90ms.
+    const squashElapsed = now - this._heroMoveAt;
+    const squashing = squashElapsed >= 0 && squashElapsed < HERO_SQUASH_MS;
+    const sp2 = squashing ? squashElapsed / HERO_SQUASH_MS : 1;
+    const scaleX = squashing ? 1.15 - 0.15 * sp2 : 1;
+    const scaleY = squashing ? 0.85 + 0.15 * sp2 : 1;
+
+    ctx.save();
+    if (squashing) {
+      ctx.translate(cx, cy);
+      ctx.scale(scaleX, scaleY);
+      ctx.translate(-cx, -cy);
+    }
 
     const glow = this.sprites.orange;
     if (glow) ctx.drawImage(glow.canvas, px - glow.pad, py - glow.pad, size + glow.pad * 2, size + glow.pad * 2);
@@ -387,6 +621,8 @@ export class Renderer {
       ctx.fillRect(px + size * 0.3, py + size * 0.38, eyeSize, eyeSize);
       ctx.fillRect(px + size * 0.58, py + size * 0.38, eyeSize, eyeSize);
     }
+
+    ctx.restore();
   }
 
   _updateAndDrawParticles(ctx, dt) {
