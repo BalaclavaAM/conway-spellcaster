@@ -342,28 +342,32 @@ export class Renderer {
     else if (this._action !== 'idle' && now > this._actionExpire) this._action = 'idle';
 
     const bob = Math.sin(now / 300) * 2;
-    const px = p.x * cell;
-    const py = p.y * cell + bob;
+    // #12: el héroe se veía diminuto a 1 celda; se dibuja a 1.6 celdas centrado en su casilla.
+    const size = cell * 1.6;
+    const cx = p.x * cell + cell / 2;
+    const cy = p.y * cell + cell / 2 + bob;
+    const px = cx - size / 2;
+    const py = cy - size / 2;
 
     const glow = this.sprites.orange;
-    if (glow) ctx.drawImage(glow.canvas, px - glow.pad, py - glow.pad, cell + glow.pad * 2, cell + glow.pad * 2);
+    if (glow) ctx.drawImage(glow.canvas, px - glow.pad, py - glow.pad, size + glow.pad * 2, size + glow.pad * 2);
 
     if (this.heroMode === 'sheet' && this.heroReady) {
       const interval = HERO_ANIM_MS[this._action] || HERO_ANIM_MS.idle;
       const toggle = Math.floor(now / interval) % 2;
       const base = HERO_FRAME[this._action] ?? HERO_FRAME.idle;
       const frame = (this._action === 'dead' || this._action === 'win') ? base : base + toggle;
-      ctx.drawImage(this.heroImg, frame * 32, 0, 32, 32, px, py, cell, cell);
+      ctx.drawImage(this.heroImg, frame * 32, 0, 32, 32, px, py, size, size);
     } else if (this.heroMode === 'svg' && this.heroReady) {
-      ctx.drawImage(this.heroImg, px, py, cell, cell);
+      ctx.drawImage(this.heroImg, px, py, size, size);
     } else if (this.heroMode === 'fallback') {
       const t = this.theme;
       ctx.fillStyle = t.orange;
-      ctx.fillRect(px + cell * 0.12, py + cell * 0.12, cell * 0.76, cell * 0.76);
+      ctx.fillRect(px + size * 0.12, py + size * 0.12, size * 0.76, size * 0.76);
       ctx.fillStyle = t.bg;
-      const eyeSize = cell * 0.12;
-      ctx.fillRect(px + cell * 0.3, py + cell * 0.38, eyeSize, eyeSize);
-      ctx.fillRect(px + cell * 0.58, py + cell * 0.38, eyeSize, eyeSize);
+      const eyeSize = size * 0.12;
+      ctx.fillRect(px + size * 0.3, py + size * 0.38, eyeSize, eyeSize);
+      ctx.fillRect(px + size * 0.58, py + size * 0.38, eyeSize, eyeSize);
     }
   }
 

@@ -1,0 +1,7 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - heading "CONWAY SPELLCASTER" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - generic [ref=e5]: gen 0
+      - generic [ref=e6]: turn 0 / 30
+  - main [ref=e7]

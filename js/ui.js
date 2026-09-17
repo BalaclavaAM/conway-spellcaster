@@ -35,11 +35,13 @@ function injectStyles() {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
-    .ui-panel { display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+    .ui-panel { display: flex; flex-direction: column; gap: 8px; box-sizing: border-box; }
     .ui-panel * { box-sizing: border-box; }
-    .ui-box-body { padding: 8px 10px; }
+    /* #12: el panel desbordaba a 1080p (fila de iconos por debajo del fold); menos padding. */
+    .ui-panel .box { padding: 1.1em 0.7em 0.6em; margin-top: 0.6em; }
+    .ui-box-body { padding: 6px 8px; }
 
-    .ui-log { display: flex; flex-direction: column; gap: 2px; min-height: calc(${LOG_SIZE} * 1.4em); font-size: 0.85em; }
+    .ui-log { display: flex; flex-direction: column; gap: 2px; min-height: calc(${LOG_SIZE} * 1.1em); font-size: 0.8em; }
     .ui-log-line { white-space: pre-wrap; word-break: break-word; }
     .ui-log-line--cast { color: var(--cyan, #19e6ff); }
     .ui-log-line--ai { color: var(--orange, #ff7a1a); }
@@ -56,10 +58,11 @@ function injectStyles() {
       position: absolute; inset: 0; display: flex; align-items: center;
       padding: 6px; color: var(--cyan, #19e6ff); background: var(--panel, #0a0c10);
     }
+    .ui-console-status[hidden] { display: none; }
     .ui-caret { margin-left: 2px; animation: ui-blink 1s step-end infinite; }
     @keyframes ui-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
-    .ui-gauge { display: flex; gap: 8px; height: 220px; }
+    .ui-gauge { display: flex; gap: 8px; height: 150px; }
     .ui-gauge-ticks {
       display: flex; flex-direction: column; justify-content: space-between;
       font-size: 0.7em; color: var(--border, #2a3140); text-align: right;
@@ -82,7 +85,7 @@ function injectStyles() {
     .ui-gauge-label--safe { color: var(--green, #35ff8a); }
     .ui-gauge-label--under { color: var(--red, #ff3b3b); }
 
-    .ui-ai-comment { min-height: 3.6em; color: var(--orange, #ff7a1a); font-size: 0.9em; margin: 0; }
+    .ui-ai-comment { min-height: 2.4em; color: var(--orange, #ff7a1a); font-size: 0.85em; margin: 0; }
 
     .ui-grimoire { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
     .ui-spell-icon {

@@ -1,0 +1,57 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - heading "CONWAY SPELLCASTER" [level=1] [ref=e3]
+    - generic [ref=e4]:
+      - generic [ref=e5]: gen 0
+      - generic [ref=e6]: turn 0 / 30
+  - main [ref=e7]:
+    - generic [ref=e10]:
+      - generic [ref=e11]:
+        - text: ┌ SPELL CONSOLE ┐
+        - textbox "Escribe un hechizo..." [active] [ref=e14]
+      - generic [ref=e15]: ┌ LOG ┐
+      - generic [ref=e18]:
+        - text: ┌ REACTOR POPULATION ┐
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - generic [ref=e22]: "100"
+            - generic [ref=e23]: "90"
+            - generic [ref=e24]: "80"
+            - generic [ref=e25]: "70"
+            - generic [ref=e26]: "60"
+            - generic [ref=e27]: "50"
+            - generic [ref=e28]: "40"
+            - generic [ref=e29]: "30"
+            - generic [ref=e30]: "20"
+            - generic [ref=e31]: "10"
+            - generic [ref=e32]: "0"
+          - generic [ref=e34]: 28 ◀
+          - generic:
+            - generic [ref=e35]: SOBRECARGA
+            - generic [ref=e36]: SAFE
+            - generic [ref=e37]: MUERTE TÉRMICA
+      - generic [ref=e38]:
+        - text: ┌ REACTOR AI ┐
+        - paragraph [ref=e40]
+      - generic [ref=e41]:
+        - button "Glider 1" [ref=e42] [cursor=pointer]:
+          - img "Glider" [ref=e43]
+          - generic [ref=e44]: "1"
+        - button "LWSS 2" [ref=e45] [cursor=pointer]:
+          - img "LWSS" [ref=e46]
+          - generic [ref=e47]: "2"
+        - button "Block 3" [ref=e48] [cursor=pointer]:
+          - img "Block" [ref=e49]
+          - generic [ref=e50]: "3"
+        - button "Beehive 4" [ref=e51] [cursor=pointer]:
+          - img "Beehive" [ref=e52]
+          - generic [ref=e53]: "4"
+        - button "Blinker 5" [ref=e54] [cursor=pointer]:
+          - img "Blinker" [ref=e55]
+          - generic [ref=e56]: "5"
+        - button "R-pentomino 6" [ref=e57] [cursor=pointer]:
+          - img "R-pentomino" [ref=e58]
+          - generic [ref=e59]: "6"
+        - button "Eater 7" [ref=e60] [cursor=pointer]:
+          - img "Eater" [ref=e61]
+          - generic [ref=e62]: "7"
