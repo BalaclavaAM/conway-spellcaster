@@ -9,4 +9,19 @@ traduce a patrones del Juego de la Vida. Construido en 1 h con múltiples agente
 
 ```
 python -m http.server 8080
+# abrir http://localhost:8080
 ```
+
+## Controles
+
+- **Flechas / WASD**: mover a Clawd 1 celda (el tablero envuelve toroidalmente: salir por un borde
+  te aparece en el opuesto).
+- **Enter**: enfoca la consola de hechizos (`Escribe un hechizo...`); `Enter` envía, `Shift+Enter` salto de línea.
+- **1..7**: castea un hechizo del grimorio por teclado (sin IA) 3 celdas al este del héroe, dir E.
+  Orden: 1 Glider · 2 LWSS · 3 Block · 4 Beehive · 5 Blinker · 6 R-pentomino · 7 Eater.
+- **R**: reinicia la partida (vuelve directo a `play`, no repite el tutorial).
+- **M**: mute.
+- **F**: muestra/oculta el contador de FPS.
+- **Escape**: dentro del tutorial, lo salta.
+
+Guion de demo de 3 minutos: [`docs/DEMO.md`](docs/DEMO.md).
