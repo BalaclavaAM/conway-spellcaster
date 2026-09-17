@@ -404,7 +404,9 @@ async function startGame() {
   syncViews();
 }
 
-if (typeof document !== 'undefined') {
+const isRenderTest = typeof location !== 'undefined' && location.hash === '#render-test';
+
+if (typeof document !== 'undefined' && !isRenderTest) {
   await startGame();
 }
 
