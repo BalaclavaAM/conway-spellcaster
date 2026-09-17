@@ -35,7 +35,7 @@ js/ui.js            panel derecho: consola, log, gauge, caja de la IA        (is
 js/audio.js         Web Audio con osciladores, sin assets                    (issue: audio)
 js/tutorial.js      overlay de tutorial de 4 pasos                           (issue: tutorial)
 js/score.js         overlay final con score y desglose                       (issue: score)
-assets/clawd.svg    sprite del héroe                                         (issue: clawd)
+assets/**           arte y sonido, ver sección Assets                        (issue: assets, lo hace una persona)
 ```
 
 ## Interfaces (contrato; no cambiar firmas sin decirlo en el issue)
@@ -82,7 +82,8 @@ export class Renderer {
 ```
 Render: celda viva = cuadrado con borde neón cian y relleno oscuro translúcido; `age===1` = blanco-cian brillante;
 celda que murió en el último step = fade magenta durante ~3 frames (compara `state.prevGrid`).
-Héroe = `assets/clawd.svg` con `drawImage` en la celda del jugador, con bob senoidal de 2 px.
+Héroe: si existe `assets/clawd_sheet.png` anima frames (idle 2 fps, walk al moverse, cast al castear, dead/win
+según `phase`); si no, `assets/clawd.svg` estático; si no, placeholder. Siempre con bob senoidal de 2 px.
 Salida = `>` verde con pulso. Glow: pre-renderiza UNA celda con `shadowBlur` a un offscreen canvas por color
 y usa `drawImage` (mucho más rápido que shadowBlur por celda). Objetivo: 120+ FPS, medir con un contador
 de FPS visible con la tecla F.
@@ -148,11 +149,13 @@ con el comentario (efecto typewriter 20 ms/char), fila de 7 iconos del grimorio 
 
 ### js/audio.js
 ```js
-export const sfx = { cast(), step(), die(), win(), alarm(), ui() }   // osciladores, ≤ 250 ms cada uno
+export const sfx = { cast(), step(), die(), win(), alarm(), ui() }   // ≤ 600 ms cada uno
 export function unlock()                                             // llamar en el primer gesto del usuario
 export function toggleMute()
+export function music(on)                                            // loop de assets/music/loop.ogg si existe
 ```
-Estilo 8-bit: `square`/`triangle`, envolventes cortas, sin assets externos.
+Al arrancar intenta `fetch` de cada `assets/sfx/<name>.wav` y los decodifica; el que falte se reemplaza por su
+oscilador 8-bit (`square`/`triangle`, envolvente corta). La música es opcional y arranca en `unlock()`.
 
 ### js/tutorial.js
 ```js
@@ -171,10 +174,25 @@ Fórmula: 1000 base + 25 × turnos sobrantes + 150 × hechizos usados (máx 4) +
 de población. Si murió: mismo overlay con título "REACTOR PERDIDO" y solo los puntos acumulados.
 Rangos: S ≥ 2200, A ≥ 1800, B ≥ 1400, C resto. Contador animado que sube, botón "OTRA VEZ" (R).
 
-### assets/clawd.svg
-Clawd: la mascota naranja de Claude. Cuerpo naranja (`#ff7a1a`) rectangular con esquinas redondeadas,
-ligeramente más ancho que alto, dos ojos negros verticales tipo píxel y cuatro patitas cortas abajo.
-ViewBox 32×32, sin texto, fondo transparente, se ve bien a 20 px. Un solo archivo SVG.
+## Assets (los produce una persona, no un agente; el código los carga con fallback)
+
+Todo asset es **opcional**: cada módulo intenta cargarlo y si falla usa su fallback procedural.
+Nombres y specs fijos para que código y arte avancen en paralelo sin hablarse:
+
+| Archivo | Spec | Fallback en código |
+|---|---|---|
+| `assets/clawd.svg` | Clawd (mascota naranja de Claude), viewBox 32×32, transparente, < 3 KB | cuadrado naranja con 2 ojos |
+| `assets/clawd_sheet.png` | sprite sheet 32×32 por frame, 1 fila, 8 frames: idle×2, walk×2, cast×2, dead, win. Fondo transparente, estilo pixel art 1 px de contorno oscuro | `clawd.svg` estático |
+| `assets/icons/<spell>.svg` | 7 iconos monocromos (rellena con `currentColor`), viewBox 24×24, uno por id: glider, lwss, block, beehive, blinker, r_pentomino, eater | glyph unicode de `PATTERNS` |
+| `assets/logo.svg` | logotipo `CONWAY SPELLCASTER` para tutorial y score, viewBox 400×80, cian con glow, transparente | texto en fuente pixel |
+| `assets/rank_S.svg` … `rank_C.svg` | 4 medallas 64×64 para el score | letra en fuente pixel |
+| `assets/sfx/cast.wav` `step.wav` `die.wav` `win.wav` `alarm.wav` `ui.wav` | 8-bit, mono, ≤ 600 ms, 44.1 kHz, normalizados a −6 dB. Sugerido: jsfxr (sfxr.me) | osciladores de `audio.js` |
+| `assets/music/loop.ogg` | chiptune loop 30–60 s, ~120 BPM, tenso y oscuro, cortado a compás para loop perfecto, ≤ 1 MB. Sugerido: BeepBox | sin música |
+| `assets/favicon.png` | 64×64, Clawd sobre negro | ninguno |
+| `docs/screenshot-1.png`, `docs/screenshot-2.png`, `docs/demo.gif` | capturas finales del juego real (las toma integración) | — |
+
+Paleta obligatoria para todo el arte: los colores de `css/theme.css`. Clawd siempre `#ff7a1a` con ojos `#050608`.
+Estilo: pixel art limpio, contorno de 1 px, sin antialiasing en los PNG, neón sobre negro.
 
 ## Tema visual (css/theme.css)
 
