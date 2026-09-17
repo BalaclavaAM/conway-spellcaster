@@ -53,6 +53,7 @@ body {
   justify-content: center;
   padding: 1em;
   overflow: hidden;
+  container-type: size;
   background:
     linear-gradient(var(--grid) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid) 1px, transparent 1px);
@@ -60,11 +61,10 @@ body {
 }
 
 #board {
+  /* tamaño CSS explícito e independiente del buffer: evita el bucle canvas.width -> ResizeObserver -> encoger */
   aspect-ratio: 40 / 24;
-  width: auto;
+  width: min(100%, calc(100cqh * 40 / 24));
   height: auto;
-  max-width: 100%;
-  max-height: 100%;
   border: 1px solid var(--border);
   background: var(--bg);
 }
