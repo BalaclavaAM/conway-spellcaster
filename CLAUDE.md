@@ -161,6 +161,7 @@ oscilador 8-bit (`square`/`triangle`, envolvente corta). La música es opcional 
 ```js
 export function showTutorial(root, onDone)     // overlay sobre el tablero, 4 pasos, botón "JUGAR"
 ```
+Referencia visual: `docs/ref-tutorial.jpg`.
 Pasos: 1) Eres Clawd, llega a `>`. 2) Las celdas cian están vivas y te matan; siguen las reglas de Conway
 (mini-demo animada de 3 generaciones dentro del overlay). 3) Escribe hechizos en la consola; ejemplo tipeado
 con typewriter. 4) El reactor explota fuera del rango de población. Navegable con → y Enter.
@@ -173,6 +174,7 @@ export function showScore(root, state, onRetry)
 Fórmula: 1000 base + 25 × turnos sobrantes + 150 × hechizos usados (máx 4) + 300 si nunca salió de rango
 de población. Si murió: mismo overlay con título "REACTOR PERDIDO" y solo los puntos acumulados.
 Rangos: S ≥ 2200, A ≥ 1800, B ≥ 1400, C resto. Contador animado que sube, botón "OTRA VEZ" (R).
+Referencia visual: `docs/ref-score.jpg`.
 
 ## Assets (los produce una persona, no un agente; el código los carga con fallback)
 
@@ -207,7 +209,7 @@ Estilo: pixel art limpio, contorno de 1 px, sin antialiasing en los PNG, neón s
 ```
 Fondo negro, gridlines `--grid`, glow cian, panel derecho con bordes de 1 px `--border` y títulos en cajas
 tipo terminal. Overlay CRT: scanlines al 6 % de opacidad + viñeta suave. Google Fonts permitido.
-Referencia visual: `docs/mockup-1.png` (estado normal) y `docs/mockup-2.png` (caos).
+Referencia visual: `docs/mockup-1.png` (estado normal), `docs/mockup-2.png` (caos), `docs/ref-tutorial.jpg`, `docs/ref-score.jpg`.
 
 ## Cómo correr
 
