@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <title>Rank S</title>
+  <path d="M22 40 L14 60 L24 57 L29 63 L25 42 Z" fill="#2a3140" stroke="#050608" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M42 40 L50 60 L40 57 L35 63 L39 42 Z" fill="#ff7a1a" stroke="#050608" stroke-width="1.5" stroke-linejoin="round"/>
+  <circle cx="32" cy="30" r="24" fill="#2a3140" stroke="#050608" stroke-width="2"/>
+  <circle cx="32" cy="30" r="19" fill="#ff7a1a" stroke="#050608" stroke-width="1.5"/>
+  <circle cx="32" cy="30" r="19" fill="none" stroke="#eafcff" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="2 3"/>
+  <g fill="#050608" transform="translate(0,-2)">
+    <rect x="26.60" y="20.40" width="3.6" height="3.6"/>
+    <rect x="30.20" y="20.40" width="3.6" height="3.6"/>
+    <rect x="33.80" y="20.40" width="3.6" height="3.6"/>
+    <rect x="37.40" y="20.40" width="3.6" height="3.6"/>
+    <rect x="23.00" y="24.00" width="3.6" height="3.6"/>
+    <rect x="23.00" y="27.60" width="3.6" height="3.6"/>
+    <rect x="26.60" y="31.20" width="3.6" height="3.6"/>
+    <rect x="30.20" y="31.20" width="3.6" height="3.6"/>
+    <rect x="33.80" y="31.20" width="3.6" height="3.6"/>
+    <rect x="37.40" y="34.80" width="3.6" height="3.6"/>
+    <rect x="37.40" y="38.40" width="3.6" height="3.6"/>
+    <rect x="23.00" y="42.00" width="3.6" height="3.6"/>
+    <rect x="26.60" y="42.00" width="3.6" height="3.6"/>
+    <rect x="30.20" y="42.00" width="3.6" height="3.6"/>
+    <rect x="33.80" y="42.00" width="3.6" height="3.6"/>
+  </g>
+</svg>
