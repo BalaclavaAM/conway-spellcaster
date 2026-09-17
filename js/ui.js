@@ -1,395 +1,380 @@
-// Conway Spellcaster — js/ui.js
-// Panel derecho: consola de hechizos, log, gauge de población, caja de IA, grimorio.
-// Issue #7. Solo toca este archivo; estilos propios inyectados vía <style> (usa vars de css/theme.css).
+// Panel derecho: consola de hechizos, log, gauge de población y grimorio.
+// Ver contrato en CLAUDE.md / issue #7.
 
-// ponytail: lista literal de fallback si js/patterns.js aún no existe o falla el import dinámico.
 const FALLBACK_PATTERNS = {
-  glider:      { name: 'Glider',      glyph: '◢', desc: 'Proyectil diagonal' },
-  lwss:        { name: 'LWSS',        glyph: '➤', desc: 'Nave recta, rompe muros' },
-  block:       { name: 'Block',       glyph: '■', desc: 'Muro' },
-  beehive:     { name: 'Beehive',     glyph: '⬢', desc: 'Muro resistente' },
-  blinker:     { name: 'Blinker',     glyph: '┃', desc: 'Faro' },
+  glider: { name: 'Glider', glyph: '◢', desc: 'Proyectil diagonal' },
+  lwss: { name: 'LWSS', glyph: '➤', desc: 'Nave recta, rompe muros' },
+  block: { name: 'Block', glyph: '■', desc: 'Muro' },
+  beehive: { name: 'Beehive', glyph: '⬢', desc: 'Muro resistente' },
+  blinker: { name: 'Blinker', glyph: '┃', desc: 'Faro' },
   r_pentomino: { name: 'R-pentomino', glyph: '✸', desc: 'Bomba de caos' },
-  eater:       { name: 'Eater',       glyph: '◘', desc: 'Devora proyectiles' },
+  eater: { name: 'Eater', glyph: '◘', desc: 'Devora proyectiles' },
 };
 const FALLBACK_SPELL_IDS = Object.keys(FALLBACK_PATTERNS);
 
+const STYLE_ID = 'ui-panel-styles';
+const LOG_SIZE = 8;
+const TYPE_SPEED_MS = 20;
+
 let els = null;
-let twTimer = null;
-let lastAiComment = null;
 
-function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+async function loadPatterns() {
+  try {
+    const mod = await import('./patterns.js');
+    if (mod.PATTERNS && mod.SPELL_IDS) {
+      return { PATTERNS: mod.PATTERNS, SPELL_IDS: mod.SPELL_IDS };
+    }
+  } catch {
+    // js/patterns.js todavía no existe (issue en paralelo): usa la lista literal de CLAUDE.md.
+  }
+  return { PATTERNS: FALLBACK_PATTERNS, SPELL_IDS: FALLBACK_SPELL_IDS };
+}
 
-function injectStyle() {
-  if (document.getElementById('ui-panel-style')) return;
+function injectStyles() {
+  if (document.getElementById(STYLE_ID)) return;
   const style = document.createElement('style');
-  style.id = 'ui-panel-style';
+  style.id = STYLE_ID;
   style.textContent = `
-#panel { display: flex; flex-direction: column; gap: 0.8em; font-size: 13px; }
-#panel .box { margin-top: 0; }
+    .ui-panel { display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+    .ui-panel * { box-sizing: border-box; }
+    .ui-box-body { padding: 8px 10px; }
 
-.console-wrap { position: relative; }
-.spell-textarea {
-  width: 100%;
-  resize: none;
-  background: transparent;
-  border: 1px solid var(--border);
-  color: var(--white);
-  font-family: var(--font-mono);
-  font-size: 1em;
-  padding: 0.5em;
-  line-height: 1.4;
-}
-.spell-textarea:focus { outline: none; border-color: var(--cyan-dim); }
-.spell-textarea:disabled { color: transparent; }
+    .ui-log { display: flex; flex-direction: column; gap: 2px; min-height: calc(${LOG_SIZE} * 1.4em); font-size: 0.85em; }
+    .ui-log-line { white-space: pre-wrap; word-break: break-word; }
+    .ui-log-line--cast { color: var(--cyan, #19e6ff); }
+    .ui-log-line--ai { color: var(--orange, #ff7a1a); }
+    .ui-log-line--sys { color: #7a8494; }
 
-.casting-indicator {
-  display: none;
-  position: absolute;
-  inset: 1px;
-  align-items: center;
-  padding: 0.5em;
-  background: var(--panel);
-  color: var(--cyan);
-  font-family: var(--font-mono);
-  pointer-events: none;
-}
-.casting-indicator.active { display: flex; }
-.casting-indicator .cursor { animation: ui-blink 1s steps(1) infinite; margin-left: 0.3em; }
+    .ui-console-input-wrap { position: relative; margin-top: 8px; }
+    .ui-console-input {
+      width: 100%; resize: none; background: transparent;
+      border: 1px solid var(--border, #2a3140); color: var(--white, #eafcff);
+      padding: 6px; font-size: 0.9em; font-family: inherit;
+    }
+    .ui-console-input:disabled { opacity: 0.4; }
+    .ui-console-status {
+      position: absolute; inset: 0; display: flex; align-items: center;
+      padding: 6px; color: var(--cyan, #19e6ff); background: var(--panel, #0a0c10);
+    }
+    .ui-caret { margin-left: 2px; animation: ui-blink 1s step-end infinite; }
+    @keyframes ui-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
-@keyframes ui-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
+    .ui-gauge { display: flex; gap: 8px; height: 220px; }
+    .ui-gauge-ticks {
+      display: flex; flex-direction: column; justify-content: space-between;
+      font-size: 0.7em; color: var(--border, #2a3140); text-align: right;
+    }
+    .ui-gauge-track {
+      position: relative; width: 14px;
+      border: 1px solid var(--border, #2a3140);
+    }
+    .ui-gauge-track--alarm { animation: ui-alarm-blink 0.5s steps(1) infinite; }
+    @keyframes ui-alarm-blink { 0%, 49% { border-color: var(--red, #ff3b3b); } 50%, 100% { border-color: var(--border, #2a3140); } }
+    .ui-gauge-needle {
+      position: absolute; left: 100%; margin-left: 4px; white-space: nowrap;
+      transform: translateY(50%); transition: bottom 300ms ease;
+      font-size: 0.85em; color: var(--white, #eafcff);
+    }
+    .ui-gauge-needle--danger { color: var(--red, #ff3b3b); }
+    .ui-gauge-labels { position: relative; font-size: 0.72em; }
+    .ui-gauge-label { position: absolute; left: 0; transform: translateY(50%); white-space: nowrap; }
+    .ui-gauge-label--over { color: var(--red, #ff3b3b); }
+    .ui-gauge-label--safe { color: var(--green, #35ff8a); }
+    .ui-gauge-label--under { color: var(--red, #ff3b3b); }
 
-.log-list { display: flex; flex-direction: column; gap: 0.2em; word-break: break-word; }
-.log-line { line-height: 1.35; }
-.log-cast { color: var(--cyan); }
-.log-ai { color: var(--orange); }
-.log-sys { color: var(--border); }
+    .ui-ai-comment { min-height: 3.6em; color: var(--orange, #ff7a1a); font-size: 0.9em; margin: 0; }
 
-.gauge { display: flex; align-items: stretch; height: 220px; gap: 0.6em; }
-.gauge-labels {
-  display: flex; flex-direction: column; justify-content: space-between;
-  font-size: 0.7em; color: var(--white); opacity: 0.6; text-align: right;
-}
-.gauge-track-wrap { position: relative; width: 22px; }
-.gauge-track {
-  width: 100%; height: 100%;
-  border: 1px solid var(--border);
-  box-sizing: border-box;
-}
-.gauge-track.gauge-alarm { animation: ui-alarm-blink 0.5s steps(1) infinite; }
-@keyframes ui-alarm-blink {
-  0%, 49% { background: var(--red) !important; }
-  50%, 100% { background: transparent !important; border-color: var(--red); }
-}
-.gauge-needle {
-  position: absolute;
-  left: calc(100% + 4px);
-  transform: translateY(50%);
-  bottom: 0%;
-  transition: bottom 0.3s ease;
-  color: var(--white);
-  white-space: nowrap;
-  font-size: 0.85em;
-}
-.gauge-side {
-  display: flex; flex-direction: column; justify-content: space-between;
-  font-size: 0.65em; letter-spacing: 0.03em; text-align: left; margin-left: 2.4em;
-}
-.gauge-side-label.over { color: var(--red); }
-.gauge-side-label.safe { color: var(--green); }
-.gauge-side-label.under { color: var(--red); }
+    .ui-grimoire { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .ui-spell-icon {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      background: transparent; border: 1px solid var(--border, #2a3140);
+      padding: 4px; cursor: pointer; color: var(--cyan, #19e6ff);
+    }
+    .ui-spell-icon img, .ui-spell-glyph { width: 22px; height: 22px; line-height: 22px; text-align: center; }
+    .ui-spell-key { font-size: 0.7em; color: var(--cyan-dim, #0a6b78); }
 
-.ai-text { color: var(--orange); min-height: 3.6em; line-height: 1.4; white-space: pre-wrap; }
-
-.grimoire-row { display: flex; gap: 0.4em; flex-wrap: wrap; }
-.btn.spell {
-  flex: 1 1 0;
-  display: flex; flex-direction: column; align-items: center; gap: 0.3em;
-  padding: 0.5em 0.3em;
-}
-.btn.spell img, .btn.spell .spell-glyph { width: 22px; height: 22px; }
-.spell-glyph { display: flex; align-items: center; justify-content: center; font-size: 1.1em; color: var(--cyan); }
-.spell-key { font-size: 0.75em; opacity: 0.7; }
-
-.apikey-box { max-width: 360px; }
-.apikey-text { margin: 0 0 0.8em; line-height: 1.4; }
-.apikey-input {
-  width: 100%; background: transparent; border: 1px solid var(--border); color: var(--white);
-  font-family: var(--font-mono); padding: 0.5em; margin-bottom: 0.8em;
-}
-.apikey-input:focus { outline: none; border-color: var(--cyan-dim); }
-.apikey-actions { display: flex; flex-direction: column; gap: 0.5em; align-items: stretch; }
-.apikey-skip { color: var(--border); border-color: var(--border); font-size: 0.78em; }
-.apikey-skip:hover { color: var(--cyan); border-color: var(--cyan-dim); }
-`;
+    .ui-api-modal { max-width: 320px; }
+    .ui-api-modal p { margin: 0 0 8px; font-size: 0.9em; }
+    .ui-api-modal input {
+      width: 100%; margin-bottom: 8px; padding: 6px; background: transparent;
+      border: 1px solid var(--border, #2a3140); color: var(--white, #eafcff); font-family: inherit;
+    }
+    .ui-api-modal a { display: block; margin-top: 10px; font-size: 0.8em; color: var(--cyan-dim, #0a6b78); }
+  `;
   document.head.appendChild(style);
 }
 
-function renderLog(log) {
-  if (!els || !els.logList) return;
-  els.logList.innerHTML = '';
-  const items = Array.isArray(log) ? log.slice(-8) : [];
-  for (const entry of items) {
-    const kind = (entry && entry.kind) || 'sys';
-    const text = (entry && entry.text) || '';
-    const div = document.createElement('div');
-    div.className = 'log-line log-' + kind;
-    div.textContent = kind === 'cast' ? '> ' + text : text;
-    els.logList.appendChild(div);
-  }
+function buildBox(title, id) {
+  const el = document.createElement('div');
+  el.className = 'box ui-box';
+  el.id = id;
+  el.dataset.title = title;
+  const body = document.createElement('div');
+  body.className = 'ui-box-body';
+  el.appendChild(body);
+  return { el, body };
 }
 
-function updateGauge(state) {
-  if (!els) return;
-  const pop = clamp(Number(state.pop) || 0, 0, 100);
-  const min = clamp(state.popMin != null ? Number(state.popMin) : 10, 0, 100);
-  const max = clamp(state.popMax != null ? Number(state.popMax) : 80, 0, 100);
-  els.gaugeTrack.style.background =
-    `linear-gradient(to top, var(--red) 0%, var(--red) ${min}%, var(--green) ${min}%, var(--green) ${max}%, var(--red) ${max}%, var(--red) 100%)`;
-  els.gaugeNeedle.style.bottom = pop + '%';
-  els.gaugeNeedleNum.textContent = String(Math.round(Number(state.pop) || 0));
-  const outOfRange = Number(state.pop) < min || Number(state.pop) > max;
-  els.gaugeTrack.classList.toggle('gauge-alarm', !!outOfRange);
-}
+export async function mountUI(root, { onSpell, onKey } = {}) {
+  injectStyles();
+  if (els?.typeTimer) clearInterval(els.typeTimer);
+  root.innerHTML = '';
+  root.classList.add('ui-panel');
 
-function typewrite(el, text) {
-  const value = text || '';
-  if (value === lastAiComment) return;
-  lastAiComment = value;
-  clearInterval(twTimer);
-  el.textContent = '';
-  if (!value) return;
-  let i = 0;
-  twTimer = setInterval(() => {
-    el.textContent += value[i];
-    i += 1;
-    if (i >= value.length) clearInterval(twTimer);
-  }, 20);
-}
+  const consoleBox = buildBox('SPELL CONSOLE', 'ui-console-box');
+  const textarea = document.createElement('textarea');
+  textarea.className = 'ui-console-input';
+  textarea.rows = 3;
+  textarea.placeholder = 'Escribe un hechizo...';
+  const status = document.createElement('div');
+  status.className = 'ui-console-status';
+  status.hidden = true;
+  status.innerHTML = 'casting<span class="ui-caret">_</span>';
+  const inputWrap = document.createElement('div');
+  inputWrap.className = 'ui-console-input-wrap';
+  inputWrap.append(textarea, status);
+  consoleBox.body.appendChild(inputWrap);
 
-async function buildGrimoire(container, onKey) {
-  let patterns = FALLBACK_PATTERNS;
-  let ids = FALLBACK_SPELL_IDS;
-  try {
-    const mod = await import('./patterns.js');
-    if (mod && mod.PATTERNS) {
-      patterns = mod.PATTERNS;
-      ids = mod.SPELL_IDS || Object.keys(mod.PATTERNS);
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      textarea.blur();
+      return;
     }
-  } catch (e) {
-    // fallback ya asignado
+    if (e.key !== 'Enter' || e.shiftKey) return;
+    e.preventDefault();
+    const text = textarea.value.trim();
+    if (!text) return;
+    onSpell?.(text);
+    textarea.value = '';
+  });
+
+  const logBox = buildBox('LOG', 'ui-log-box');
+  const log = document.createElement('div');
+  log.className = 'ui-log';
+  const logLines = Array.from({ length: LOG_SIZE }, () => {
+    const line = document.createElement('div');
+    line.className = 'ui-log-line';
+    line.hidden = true;
+    log.appendChild(line);
+    return line;
+  });
+  logBox.body.appendChild(log);
+
+  const gaugeBox = buildBox('REACTOR POPULATION', 'ui-gauge-box');
+  const gauge = document.createElement('div');
+  gauge.className = 'ui-gauge';
+
+  const ticks = document.createElement('div');
+  ticks.className = 'ui-gauge-ticks';
+  for (let v = 100; v >= 0; v -= 10) {
+    const tick = document.createElement('span');
+    tick.textContent = String(v);
+    ticks.appendChild(tick);
   }
 
-  container.innerHTML = '';
-  ids.forEach((id, i) => {
-    const p = patterns[id] || {};
+  const track = document.createElement('div');
+  track.className = 'ui-gauge-track';
+  const needle = document.createElement('div');
+  needle.className = 'ui-gauge-needle';
+  needle.innerHTML = '<span class="ui-gauge-value">0</span> ◀';
+  track.appendChild(needle);
+
+  const labels = document.createElement('div');
+  labels.className = 'ui-gauge-labels';
+  const labelOver = document.createElement('span');
+  labelOver.className = 'ui-gauge-label ui-gauge-label--over';
+  labelOver.textContent = 'SOBRECARGA';
+  const labelSafe = document.createElement('span');
+  labelSafe.className = 'ui-gauge-label ui-gauge-label--safe';
+  labelSafe.textContent = 'SAFE';
+  const labelUnder = document.createElement('span');
+  labelUnder.className = 'ui-gauge-label ui-gauge-label--under';
+  labelUnder.textContent = 'MUERTE TÉRMICA';
+  labels.append(labelOver, labelSafe, labelUnder);
+
+  gauge.append(ticks, track, labels);
+  gaugeBox.body.appendChild(gauge);
+
+  const aiBox = buildBox('REACTOR AI', 'ui-ai-box');
+  const aiComment = document.createElement('p');
+  aiComment.className = 'ui-ai-comment';
+  aiBox.body.appendChild(aiComment);
+
+  const grimoire = document.createElement('div');
+  grimoire.className = 'ui-grimoire';
+
+  root.append(consoleBox.el, logBox.el, gaugeBox.el, aiBox.el, grimoire);
+
+  els = {
+    logLines,
+    textarea,
+    status,
+    track,
+    needle,
+    needleValue: needle.querySelector('.ui-gauge-value'),
+    labelOver,
+    labelSafe,
+    labelUnder,
+    aiComment,
+    gen: document.getElementById('gen'),
+    turn: document.getElementById('turn'),
+    maxturn: document.getElementById('maxturn'),
+    typeTimer: null,
+    lastAiComment: '',
+  };
+
+  const { PATTERNS, SPELL_IDS } = await loadPatterns();
+  SPELL_IDS.forEach((id, i) => {
+    const spell = PATTERNS[id];
     const key = String(i + 1);
 
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'btn spell';
-    btn.title = p.desc || p.name || id;
-    btn.dataset.id = id;
+    btn.className = 'ui-spell-icon btn';
+    btn.title = spell.desc || spell.name;
+    btn.dataset.key = key;
 
     const img = document.createElement('img');
     img.src = `assets/icons/${id}.svg`;
-    img.alt = p.name || id;
+    img.alt = spell.name;
     img.onerror = () => {
       const glyph = document.createElement('span');
-      glyph.className = 'spell-glyph';
-      glyph.textContent = p.glyph || '?';
+      glyph.className = 'ui-spell-glyph';
+      glyph.textContent = spell.glyph;
       img.replaceWith(glyph);
     };
 
-    const keySpan = document.createElement('span');
-    keySpan.className = 'spell-key';
-    keySpan.textContent = key;
+    const keyLabel = document.createElement('span');
+    keyLabel.className = 'ui-spell-key';
+    keyLabel.textContent = key;
 
-    btn.appendChild(img);
-    btn.appendChild(keySpan);
-    btn.addEventListener('click', () => {
-      if (typeof onKey === 'function') onKey(key);
-    });
-    container.appendChild(btn);
+    btn.append(img, keyLabel);
+    btn.addEventListener('click', () => onKey?.(key));
+    grimoire.appendChild(btn);
   });
 }
 
-export function mountUI(root, handlers = {}) {
-  const { onSpell, onKey } = handlers;
-  injectStyle();
-  lastAiComment = null;
-  clearInterval(twTimer);
-  root.innerHTML = '';
+function pct(n) {
+  return Math.max(0, Math.min(100, n));
+}
 
-  // SPELL CONSOLE
-  const consoleBox = document.createElement('div');
-  consoleBox.className = 'box';
-  consoleBox.dataset.title = 'SPELL CONSOLE';
-  const consoleWrap = document.createElement('div');
-  consoleWrap.className = 'console-wrap';
-  const textarea = document.createElement('textarea');
-  textarea.className = 'spell-textarea';
-  textarea.rows = 3;
-  textarea.placeholder = 'lanza un hechizo...';
-  const castingIndicator = document.createElement('div');
-  castingIndicator.className = 'casting-indicator';
-  castingIndicator.innerHTML = 'casting<span class="cursor">▌</span>';
-  consoleWrap.appendChild(textarea);
-  consoleWrap.appendChild(castingIndicator);
-  consoleBox.appendChild(consoleWrap);
+function updateGauge(state) {
+  const pop = Number(state.pop) || 0;
+  const popMin = pct(state.popMin ?? 10);
+  const popMax = pct(state.popMax ?? 80);
+  const clampedPop = pct(pop);
+  const outOfRange = pop < popMin || pop > popMax;
 
-  textarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      const text = textarea.value.trim();
-      if (text && typeof onSpell === 'function') onSpell(text);
-      textarea.value = '';
-    } else if (e.key === 'Escape') {
-      textarea.blur();
+  els.track.style.background = `linear-gradient(to top,
+    var(--red, #ff3b3b) 0%, var(--red, #ff3b3b) ${popMin}%,
+    var(--green, #35ff8a) ${popMin}%, var(--green, #35ff8a) ${popMax}%,
+    var(--red, #ff3b3b) ${popMax}%, var(--red, #ff3b3b) 100%)`;
+  els.track.classList.toggle('ui-gauge-track--alarm', outOfRange);
+
+  els.needle.style.bottom = `${clampedPop}%`;
+  els.needleValue.textContent = String(Math.round(pop));
+  els.needle.classList.toggle('ui-gauge-needle--danger', outOfRange);
+
+  els.labelOver.style.bottom = `${popMax + (100 - popMax) / 2}%`;
+  els.labelSafe.style.bottom = `${popMin + (popMax - popMin) / 2}%`;
+  els.labelUnder.style.bottom = `${popMin / 2}%`;
+}
+
+function updateLog(log = []) {
+  const entries = log.slice(-LOG_SIZE);
+  els.logLines.forEach((line, i) => {
+    const entry = entries[i];
+    if (!entry) {
+      line.hidden = true;
+      line.textContent = '';
+      return;
     }
+    line.hidden = false;
+    line.textContent = entry.text;
+    line.className = `ui-log-line ui-log-line--${entry.kind || 'sys'}`;
   });
+}
 
-  // LOG
-  const logBox = document.createElement('div');
-  logBox.className = 'box log-box';
-  logBox.dataset.title = 'LOG';
-  const logList = document.createElement('div');
-  logList.className = 'log-list';
-  logBox.appendChild(logList);
-
-  // REACTOR POPULATION
-  const gaugeBox = document.createElement('div');
-  gaugeBox.className = 'box';
-  gaugeBox.dataset.title = 'REACTOR POPULATION';
-  const gauge = document.createElement('div');
-  gauge.className = 'gauge';
-
-  const gaugeLabels = document.createElement('div');
-  gaugeLabels.className = 'gauge-labels';
-  for (let v = 100; v >= 0; v -= 10) {
-    const span = document.createElement('span');
-    span.textContent = String(v);
-    gaugeLabels.appendChild(span);
+function updateAiComment(comment = '') {
+  if (comment === els.lastAiComment) return;
+  els.lastAiComment = comment;
+  if (els.typeTimer) {
+    clearInterval(els.typeTimer);
+    els.typeTimer = null;
   }
-
-  const gaugeTrackWrap = document.createElement('div');
-  gaugeTrackWrap.className = 'gauge-track-wrap';
-  const gaugeTrack = document.createElement('div');
-  gaugeTrack.className = 'gauge-track';
-  const gaugeNeedle = document.createElement('div');
-  gaugeNeedle.className = 'gauge-needle';
-  gaugeNeedle.innerHTML = '◀ <span class="gauge-needle-num">0</span>';
-  gaugeTrackWrap.appendChild(gaugeTrack);
-  gaugeTrackWrap.appendChild(gaugeNeedle);
-
-  const gaugeSide = document.createElement('div');
-  gaugeSide.className = 'gauge-side';
-  gaugeSide.innerHTML =
-    '<span class="gauge-side-label over">SOBRECARGA</span>' +
-    '<span class="gauge-side-label safe">SAFE</span>' +
-    '<span class="gauge-side-label under">MUERTE TÉRMICA</span>';
-
-  gauge.appendChild(gaugeLabels);
-  gauge.appendChild(gaugeTrackWrap);
-  gauge.appendChild(gaugeSide);
-  gaugeBox.appendChild(gauge);
-
-  // REACTOR AI
-  const aiBox = document.createElement('div');
-  aiBox.className = 'box';
-  aiBox.dataset.title = 'REACTOR AI';
-  const aiText = document.createElement('div');
-  aiText.className = 'ai-text';
-  aiBox.appendChild(aiText);
-
-  // GRIMOIRE
-  const grimoire = document.createElement('div');
-  grimoire.className = 'grimoire-row';
-
-  root.appendChild(consoleBox);
-  root.appendChild(logBox);
-  root.appendChild(gaugeBox);
-  root.appendChild(aiBox);
-  root.appendChild(grimoire);
-
-  els = {
-    textarea,
-    castingIndicator,
-    logList,
-    gaugeTrack,
-    gaugeNeedle,
-    gaugeNeedleNum: gaugeNeedle.querySelector('.gauge-needle-num'),
-    aiText,
-    grimoire,
-    gen: document.getElementById('gen'),
-    turn: document.getElementById('turn'),
-    maxturn: document.getElementById('maxturn'),
-  };
-
-  buildGrimoire(grimoire, onKey);
+  els.aiComment.textContent = '';
+  if (!comment) return;
+  let i = 0;
+  els.typeTimer = setInterval(() => {
+    els.aiComment.textContent += comment[i];
+    i += 1;
+    if (i >= comment.length) {
+      clearInterval(els.typeTimer);
+      els.typeTimer = null;
+    }
+  }, TYPE_SPEED_MS);
 }
 
 export function updateUI(state) {
   if (!els || !state) return;
-  if (els.gen) els.gen.textContent = String(state.gen != null ? state.gen : 0);
-  if (els.turn) els.turn.textContent = String(state.turn != null ? state.turn : 0);
+  if (els.gen && state.gen != null) els.gen.textContent = String(state.gen);
+  if (els.turn && state.turn != null) els.turn.textContent = String(state.turn);
   if (els.maxturn && state.maxTurns != null) els.maxturn.textContent = String(state.maxTurns);
-  renderLog(state.log);
   updateGauge(state);
-  typewrite(els.aiText, state.aiComment);
+  updateLog(state.log);
+  updateAiComment(state.aiComment);
 }
 
 export function setBusy(bool) {
   if (!els) return;
-  els.textarea.disabled = !!bool;
-  els.castingIndicator.classList.toggle('active', !!bool);
+  els.textarea.disabled = bool;
+  els.status.hidden = !bool;
   if (!bool) els.textarea.focus();
 }
 
 export function focusConsole() {
-  if (els && els.textarea) els.textarea.focus();
+  els?.textarea?.focus();
 }
 
 export function promptApiKey() {
+  const overlay = document.getElementById('overlay');
   return new Promise((resolve) => {
-    const overlay = document.getElementById('overlay');
-    if (!overlay) { resolve(''); return; }
-    injectStyle();
+    const modal = document.createElement('div');
+    modal.className = 'box ui-api-modal';
+    modal.dataset.title = 'ANTHROPIC API KEY';
+    modal.innerHTML = `
+      <p>Pega tu API key para invocar al reactor.</p>
+      <input type="password" autocomplete="off" placeholder="sk-ant-..." />
+      <button type="button" class="btn">CONECTAR</button>
+      <a href="#">jugar sin API (modo teclado)</a>
+    `;
 
-    const box = document.createElement('div');
-    box.className = 'box apikey-box';
-    box.dataset.title = 'REACTOR LINK';
-    box.innerHTML =
-      '<p class="apikey-text">Conecta tu API key de Anthropic para invocar al Reactor AI.</p>' +
-      '<input type="password" class="apikey-input" placeholder="sk-ant-..." autocomplete="off" />' +
-      '<div class="apikey-actions">' +
-      '<button type="button" class="btn apikey-connect">CONECTAR</button>' +
-      '<button type="button" class="btn apikey-skip">jugar sin API (modo teclado 1..7)</button>' +
-      '</div>';
-    overlay.appendChild(box);
+    const input = modal.querySelector('input');
+    const submit = modal.querySelector('button');
+    const skip = modal.querySelector('a');
 
-    const input = box.querySelector('.apikey-input');
-    const connectBtn = box.querySelector('.apikey-connect');
-    const skipBtn = box.querySelector('.apikey-skip');
-
-    function cleanup() {
-      document.removeEventListener('keydown', onKeydown);
-      box.remove();
+    function onKeydown(e) {
+      if (e.key === 'Escape') close('');
     }
-    function finish(value) {
-      cleanup();
+
+    function close(value) {
+      document.removeEventListener('keydown', onKeydown);
+      overlay.innerHTML = '';
       resolve(value);
     }
-    function onKeydown(e) {
-      if (e.key === 'Escape') finish('');
-    }
 
-    connectBtn.addEventListener('click', () => finish(input.value.trim()));
-    skipBtn.addEventListener('click', () => finish(''));
+    submit.addEventListener('click', () => close(input.value.trim()));
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); finish(input.value.trim()); }
+      if (e.key === 'Enter') close(input.value.trim());
+    });
+    skip.addEventListener('click', (e) => {
+      e.preventDefault();
+      close('');
     });
     document.addEventListener('keydown', onKeydown);
+
+    overlay.innerHTML = '';
+    overlay.appendChild(modal);
     input.focus();
   });
 }
