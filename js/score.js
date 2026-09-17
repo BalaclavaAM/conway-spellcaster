@@ -289,7 +289,6 @@ export function showScore(root, state, onRetry) {
 
   const cleanup = () => {
     if (animationId) cancelAnimationFrame(animationId);
-    document.removeEventListener('keydown', handleKeydown);
   };
 
   const handleRetry = () => {
@@ -326,15 +325,6 @@ export function showScore(root, state, onRetry) {
   };
 
   animationId = requestAnimationFrame(animateCounter);
-
-  // Keyboard handler (R key)
-  const handleKeydown = (e) => {
-    if (e.key.toUpperCase() === 'R') {
-      e.preventDefault();
-      handleRetry();
-    }
-  };
-  document.addEventListener('keydown', handleKeydown);
 
   root.appendChild(box);
 }
