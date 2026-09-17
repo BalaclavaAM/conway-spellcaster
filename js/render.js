@@ -70,8 +70,11 @@ export class Renderer {
     this._onResize = this._onResize.bind(this);
     this._onKey = this._onKey.bind(this);
 
+    // Observa al PADRE, no al canvas: si observáramos el canvas, cambiar su buffer
+    // cambia su tamaño intrínseco -> nuevo resize -> bucle que lo encoge hasta 40x24 px.
+    this._box = this.canvas.parentElement || this.canvas;
     this._ro = new ResizeObserver(this._onResize);
-    this._ro.observe(this.canvas);
+    this._ro.observe(this._box);
     window.addEventListener('keydown', this._onKey);
 
     this._loadHero();
@@ -100,11 +103,20 @@ export class Renderer {
   _onResize() { this._resize(); }
 
   _resize() {
-    const rectW = this.canvas.clientWidth || this.canvas.width || W * 20;
-    const rectH = this.canvas.clientHeight || this.canvas.height || H * 20;
-    const cell = Math.max(1, Math.min(rectW / W, rectH / H));
+    const box = this._box;
+    let rectW = box.clientWidth, rectH = box.clientHeight;
+    if (box !== this.canvas) {
+      const cs = getComputedStyle(box);
+      rectW -= parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      rectH -= parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+    }
+    if (!(rectW > 0) || !(rectH > 0)) { rectW = W * 20; rectH = H * 20; }
+    const cell = Math.max(1, Math.floor(Math.min(rectW / W, rectH / H)));
     const bufW = Math.max(1, Math.round(cell * W * this.dpr));
     const bufH = Math.max(1, Math.round(cell * H * this.dpr));
+    // tamaño CSS explícito: el layout ya no depende del buffer
+    this.canvas.style.width = (cell * W) + 'px';
+    this.canvas.style.height = (cell * H) + 'px';
 
     if (this.canvas.width !== bufW) this.canvas.width = bufW;
     if (this.canvas.height !== bufH) this.canvas.height = bufH;
