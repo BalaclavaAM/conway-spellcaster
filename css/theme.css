@@ -1,0 +1,105 @@
+/* Conway Spellcaster — tema visual (tokens, fuentes, CRT overlay) */
+
+:root {
+  --bg: #050608;
+  --grid: #14181f;
+  --panel: #0a0c10;
+  --border: #2a3140;
+  --cyan: #19e6ff;
+  --cyan-dim: #0a6b78;
+  --white: #eafcff;
+  --magenta: #ff2fa0;
+  --orange: #ff7a1a;
+  --yellow: #ffe14d;
+  --green: #35ff8a;
+  --red: #ff3b3b;
+  --font-mono: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
+  --font-pixel: 'Press Start 2P', var(--font-mono);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-mono);
+}
+
+body {
+  overflow: hidden;
+}
+
+::selection { background: var(--cyan-dim); color: var(--white); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--panel); }
+::-webkit-scrollbar-thumb { background: var(--border); border: 2px solid var(--panel); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--cyan-dim); }
+
+.mono { font-family: var(--font-mono); }
+.pixel { font-family: var(--font-pixel); }
+
+/* ---- caja tipo terminal: <div class="box" data-title="TITULO"> ---- */
+.box {
+  position: relative;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 1.4em 0.9em 0.9em;
+  margin-top: 0.8em;
+}
+
+.box[data-title]::before {
+  content: "┌ " attr(data-title) " ┐";
+  position: absolute;
+  top: -0.7em;
+  left: 0.6em;
+  padding: 0 0.35em;
+  background: var(--panel);
+  color: var(--cyan);
+  font-size: 0.72em;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+/* ---- botón neón ---- */
+.btn {
+  font-family: var(--font-mono);
+  font-size: 0.85em;
+  color: var(--cyan);
+  background: transparent;
+  border: 1px solid var(--cyan-dim);
+  padding: 0.5em 1em;
+  cursor: pointer;
+  letter-spacing: 0.04em;
+  transition: color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn:hover, .btn:focus-visible {
+  color: var(--white);
+  border-color: var(--cyan);
+  box-shadow: 0 0 6px var(--cyan), 0 0 14px var(--cyan-dim), inset 0 0 6px var(--cyan-dim);
+  outline: none;
+}
+
+.btn:active { box-shadow: 0 0 3px var(--cyan); }
+.btn:disabled { color: var(--border); border-color: var(--border); box-shadow: none; cursor: default; }
+
+/* ---- overlay CRT: scanlines + viñeta, nunca captura clicks ---- */
+#crt {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  pointer-events: none;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.06) 0px,
+      rgba(0, 0, 0, 0.06) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at center, rgba(0, 0, 0, 0) 55%, rgba(0, 0, 0, 0.55) 100%);
+}
