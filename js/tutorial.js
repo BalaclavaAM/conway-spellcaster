@@ -11,10 +11,15 @@ function injectStyle() {
   width: 720px;
   max-width: 92vw;
   max-height: 80vh;
-  overflow: hidden;
+  margin-top: 0.7em;
   display: flex;
   flex-direction: column;
   gap: 1em;
+}
+/* título centrado (a diferencia del .box genérico, alineado a la izquierda) */
+.tut-box[data-title]::before {
+  left: 50%;
+  transform: translateX(-50%);
 }
 .tut-body {
   display: flex;
