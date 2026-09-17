@@ -106,7 +106,8 @@ export function buildLevel() {
   return {
     phase: 'tutorial',
     grid: grid0,
-    age: new Uint16Array(life.W * life.H),
+    // las colonias iniciales ya son "viejas": si arrancaran en 0, la gen 1 las pintaría todas blancas (age===1)
+    age: Uint16Array.from(grid0, v => (v ? 2 : 0)),
     prevGrid: grid0,
     player: { x: LEVEL.player.x, y: LEVEL.player.y },
     exit: { x: LEVEL.exit.x, y: LEVEL.exit.y },
