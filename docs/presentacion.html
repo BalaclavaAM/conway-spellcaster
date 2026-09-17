@@ -1,0 +1,375 @@
+<title>Conway Spellcaster</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Press+Start+2P&display=swap">
+<style>
+  :root {
+    --bg: #050608; --panel: #0a0c10; --panel-2: #0e1117; --border: #2a3140; --grid: #14181f;
+    --cyan: #19e6ff; --cyan-dim: #0a6b78; --white: #eafcff; --muted: #7f8a9b; --muted-2: #4f5866;
+    --magenta: #ff2fa0; --orange: #ff7a1a; --yellow: #ffe14d; --green: #35ff8a; --red: #ff3b3b;
+    --mono: 'IBM Plex Mono', 'Cascadia Mono', Consolas, monospace;
+    --pixel: 'Press Start 2P', var(--mono);
+    --col: 1080px;
+  }
+  * { box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    margin: 0; background: var(--bg); color: var(--white);
+    font-family: var(--mono); font-size: 15px; line-height: 1.6;
+    padding-block: 0 64px; padding-inline: 20px;
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  body::after {
+    content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 50;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.06) 0 1px, transparent 1px 3px);
+  }
+  a { color: var(--cyan); text-decoration: none; }
+  a:hover, a:focus-visible { text-decoration: underline; outline: none; }
+  :focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+  .wrap { max-width: var(--col); margin: 0 auto; }
+  h1, h2, h3 { font-family: var(--pixel); font-weight: 400; line-height: 1.5; text-wrap: balance; margin: 0; }
+  h2 { font-size: 15px; color: var(--cyan); letter-spacing: .02em; }
+  h3 { font-size: 10px; color: var(--white); }
+  p { margin: 0; max-width: 68ch; }
+  .muted { color: var(--muted); }
+  .eyebrow { font-family: var(--pixel); font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  code, kbd { font-family: var(--mono); font-size: .92em; }
+  code { color: var(--cyan); }
+  kbd { display: inline-block; min-width: 1.6em; text-align: center; padding: 0 .35em; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 3px; background: var(--panel-2); color: var(--white); font-weight: 500; }
+  pre { margin: 0; padding: 16px 18px; background: var(--panel); border: 1px solid var(--border); overflow-x: auto; font-size: 13px; line-height: 1.55; color: var(--white); }
+  pre .k { color: var(--magenta); } pre .s { color: var(--green); } pre .c { color: var(--muted); } pre .n { color: var(--yellow); }
+
+  /* HERO */
+  .hero { position: relative; margin: 0 -20px 56px; padding: 0 20px; border-bottom: 1px solid var(--border); overflow: hidden; background: var(--bg); }
+  .hero canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .hero .inner { position: relative; max-width: var(--col); margin: 0 auto; padding: 72px 0 56px; display: grid; grid-template-columns: 1fr auto; gap: 32px; align-items: end; }
+  .hero .logo { width: min(560px, 100%); height: auto; display: block; filter: drop-shadow(0 0 18px rgba(25,230,255,.35)); }
+  .hero .tag { margin-top: 22px; font-size: 17px; max-width: 46ch; color: var(--white); }
+  .hero .tag em { font-style: normal; color: var(--cyan); }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 28px; }
+  .btn { font-family: var(--pixel); font-size: 10px; letter-spacing: .06em; padding: 14px 18px; border: 1px solid var(--cyan); color: var(--cyan); background: rgba(10,12,16,.85); box-shadow: 0 0 14px rgba(25,230,255,.18), inset 0 0 10px rgba(25,230,255,.05); }
+  .btn:hover { background: var(--cyan); color: var(--bg); text-decoration: none; }
+  .btn.alt { border-color: var(--border); color: var(--white); box-shadow: none; }
+  .btn.alt:hover { border-color: var(--white); background: var(--panel-2); color: var(--white); }
+  .clawd { width: 148px; height: 148px; image-rendering: pixelated; filter: drop-shadow(0 0 22px rgba(255,122,26,.45)); animation: bob 2.4s ease-in-out infinite; }
+  @keyframes bob { 50% { transform: translateY(-6px); } }
+  .stats { position: relative; max-width: var(--col); margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); }
+  .stats div { padding: 16px 0; border-right: 1px solid var(--border); padding-inline: 0 16px; }
+  .stats div + div { padding-inline: 16px; }
+  .stats div:last-child { border-right: 0; }
+  .stats b { display: block; font-family: var(--pixel); font-size: 18px; color: var(--white); font-weight: 400; font-variant-numeric: tabular-nums; }
+  .stats span { font-size: 12px; color: var(--muted); }
+
+  /* SECTIONS */
+  section { margin-bottom: 64px; }
+  .sec-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 24px; }
+  .sec-head::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  .box { position: relative; background: var(--panel); border: 1px solid var(--border); padding: 24px 20px 20px; }
+  .box[data-title]::before { content: "┌ " attr(data-title) " ┐"; position: absolute; top: -.75em; left: 12px; padding: 0 6px; background: var(--panel); color: var(--cyan); font-size: 11px; letter-spacing: .08em; }
+  .three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .three .box p { font-size: 14px; }
+  .three h3 { margin-bottom: 12px; }
+  .rule { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin-top: 14px; font-size: 13px; }
+  .rule b { color: var(--cyan); font-weight: 500; }
+
+  .shots { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  figure { margin: 0; }
+  figure img { width: 100%; height: auto; display: block; border: 1px solid var(--border); }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; }
+  figcaption b { color: var(--white); font-weight: 500; }
+  .gif { margin-top: 20px; }
+  .gif img { border-color: var(--cyan-dim); box-shadow: 0 0 30px rgba(25,230,255,.12); }
+
+  .trick { display: grid; grid-template-columns: 1.1fr .9fr; gap: 24px; align-items: start; }
+  .trick ol { margin: 14px 0 0; padding-left: 1.2em; font-size: 14px; display: grid; gap: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { font-family: var(--pixel); font-size: 8px; letter-spacing: .08em; color: var(--muted); font-weight: 400; }
+  td.n { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  td.sp { color: var(--cyan); white-space: nowrap; }
+  .tablewrap { overflow-x: auto; }
+
+  .grim { display: grid; grid-template-columns: repeat(7, 1fr); gap: 12px; }
+  .spell { background: var(--panel); border: 1px solid var(--border); padding: 14px 10px 12px; text-align: center; display: grid; gap: 8px; justify-items: center; }
+  .spell img { width: 40px; height: 40px; filter: drop-shadow(0 0 6px rgba(25,230,255,.5)); }
+  .spell b { font-family: var(--pixel); font-size: 8px; color: var(--white); font-weight: 400; }
+  .spell small { font-size: 11px; color: var(--muted); line-height: 1.35; }
+  .spell.static b { color: var(--green); } .spell.ship b { color: var(--cyan); } .spell.chaos b { color: var(--magenta); }
+
+  .build { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  .lanes { display: grid; grid-template-columns: 110px 1fr; gap: 10px 14px; align-items: center; font-size: 13px; }
+  .lanes .lbl { font-family: var(--pixel); font-size: 8px; color: var(--muted); letter-spacing: .06em; text-align: right; }
+  .lane { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+  .chip { height: 34px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: var(--bg); background: var(--cyan); border: 1px solid transparent; }
+  .chip.a { background: transparent; border-color: var(--border); color: var(--muted); }
+  .chip.h { background: var(--orange); }
+  .chip.i { background: var(--green); }
+  .chip.m { background: var(--magenta); }
+  .axis { grid-column: 2; display: flex; justify-content: space-between; font-size: 11px; color: var(--muted-2); font-variant-numeric: tabular-nums; border-top: 1px solid var(--border); padding-top: 6px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; margin-right: 6px; vertical-align: -1px; }
+  .facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+  .facts .box p { font-size: 14px; }
+
+  .script { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .seq { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .seq kbd { padding: 6px 8px; font-size: 13px; }
+  .seq .sep { color: var(--muted-2); align-self: center; }
+  .planb { border-color: var(--orange); }
+  .planb[data-title]::before { color: var(--orange); }
+
+  footer { border-top: 1px solid var(--border); padding-top: 24px; display: flex; flex-wrap: wrap; gap: 8px 28px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 860px) {
+    .hero .inner { grid-template-columns: 1fr; padding-top: 48px; }
+    .clawd { width: 96px; height: 96px; }
+    .three, .shots, .trick, .facts, .script { grid-template-columns: 1fr; }
+    .grim { grid-template-columns: repeat(4, 1fr); }
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .stats div:nth-child(2) { border-right: 0; }
+    .stats div:nth-child(3) { padding-inline: 0 16px; }
+    .lanes { grid-template-columns: 1fr; } .lanes .lbl { text-align: left; } .axis { grid-column: 1; }
+  }
+  @media (max-width: 480px) { .grim { grid-template-columns: repeat(2, 1fr); } .lane { grid-template-columns: repeat(6, 1fr); } }
+  @media (prefers-reduced-motion: reduce) { .clawd { animation: none; } }
+</style>
+
+<header class="hero">
+  <canvas id="life" aria-hidden="true"></canvas>
+  <div class="inner">
+    <div>
+      <p class="eyebrow">Claude Build Day · 16 sep 2026 · duppla</p>
+      <img class="logo" src="assets/logo.svg" alt="Conway Spellcaster" width="400" height="80" style="margin-top:14px">
+      <p class="tag">Un roguelike donde <em>le hablas al Juego de la Vida</em>. Clawd tiene que cruzar un tablero de colonias vivas, y la única arma es escribirle hechizos en español a Claude.</p>
+      <div class="cta">
+        <a class="btn" href="https://balaclavaam.github.io/conway-spellcaster/" target="_blank" rel="noopener">▶ Jugar</a>
+        <a class="btn alt" href="https://github.com/BalaclavaAM/conway-spellcaster" target="_blank" rel="noopener">Código en GitHub</a>
+      </div>
+    </div>
+    <img class="clawd" src="assets/clawd.svg" alt="Clawd, el héroe" width="148" height="148">
+  </div>
+  <div class="stats">
+    <div><b>66 min</b><span>de 19:35 a 20:41, primer commit a último</span></div>
+    <div><b>36</b><span>commits en main, sin ramas ni PRs</span></div>
+    <div><b>12</b><span>cards con archivos disjuntos, 11 para agentes</span></div>
+    <div><b>2 940</b><span>líneas de HTML, CSS y JS vanilla</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section>
+    <div class="sec-head"><h2>La idea en tres celdas</h2></div>
+    <div class="three">
+      <div class="box" data-title="EL TABLERO">
+        <h3>Conway de verdad</h3>
+        <p>40×24 celdas toroidales con la regla clásica. Cada paso de Clawd avanza una generación. Si la celda a la que se mueve amanece viva, muere.</p>
+        <div class="rule"><b>B3</b><span>una celda muerta con 3 vecinas nace</span><b>S23</b><span>una viva con 2 o 3 vecinas sobrevive</span></div>
+      </div>
+      <div class="box" data-title="LOS HECHIZOS">
+        <h3>Lenguaje natural</h3>
+        <p>No colocas patrones a mano. Escribes «lanza un proyectil hacia la derecha» y Claude Haiku 4.5 elige un patrón del grimorio, la posición y la dirección. El juego lo estampa.</p>
+        <div class="rule"><b>~1.6 s</b><span>latencia medida por hechizo</span><b>1..7</b><span>modo teclado sin red, por si acaso</span></div>
+      </div>
+      <div class="box" data-title="EL REACTOR">
+        <h3>Presión constante</h3>
+        <p>La población tiene que quedarse entre 10 y 60. Dos turnos fuera de rango y el reactor explota. Tienes 24 turnos, y la salida está sellada por un patrón inmortal.</p>
+        <div class="rule"><b>tub</b><span>4 celdas estables que solo un hechizo rompe</span><b>GLaDOS</b><span>la IA comenta cada jugada con acidez</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Así se ve</h2></div>
+    <div class="shots">
+      <figure>
+        <img src="docs/screenshot-1.png" alt="Turno 7: Clawd abajo a la derecha, tres colonias en el tablero y la salida sellada por un tub" width="1600" height="900" loading="lazy">
+        <figcaption><b>Turno 7.</b> Clawd llega a la columna 39 y la salida, en verde, está rodeada por el tub. Población 32, en zona segura.</figcaption>
+      </figure>
+      <figure>
+        <img src="docs/screenshot-2.png" alt="Turno 13: se casteó un R-pentomino que rompe el tub y la IA comenta la jugada" width="1600" height="900" loading="lazy">
+        <figcaption><b>Turno 13.</b> Un R-pentomino en (36,12) rompe dos puntas del tub. La IA: «Caos puro. Espero que sobrevivas a tu propia idea.»</figcaption>
+      </figure>
+    </div>
+    <figure class="gif">
+      <img src="docs/demo.gif" alt="Animación de la corrida ganadora completa" width="1600" height="900" loading="lazy">
+      <figcaption><b>La corrida ganadora completa.</b> Tres pasos al oeste con wrap, nueve al norte, un hechizo, dos al oeste. Turno 15, rango S.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>El truco técnico</h2></div>
+    <div class="trick">
+      <div>
+        <p>El modelo nunca calcula celdas. Pedirle coordenadas exactas de un glider orientado es justo donde los modelos fallan, y un glider con una celda mal puesta muere en dos generaciones. En vez de eso, la llamada usa <code>tool_choice</code> forzado a una sola herramienta, así que la respuesta siempre es una llamada de función válida, nunca texto libre.</p>
+        <ol>
+          <li>El juego resume el tablero en 400 caracteres: héroe, salida, población y las cajas de las colonias. Nunca las 960 celdas.</li>
+          <li>Haiku devuelve <code>spell</code> de un enum de 7, más posición, dirección y un comentario de una frase.</li>
+          <li>El juego valida, rota el patrón canónico de LifeWiki hacia la dirección pedida y lo estampa.</li>
+          <li>Timeout de 4 s. Si la API falla, entra el fallback por teclado con el mensaje «Reactor offline. Improviso.»</li>
+        </ol>
+      </div>
+      <pre><span class="c">// tool cast_spell · input_schema</span>
+{
+  <span class="k">spell</span>:   <span class="s">enum</span> [glider, lwss, block, beehive,
+                blinker, r_pentomino, eater],
+  <span class="k">x</span>:       <span class="s">int</span> <span class="n">0..39</span>,
+  <span class="k">y</span>:       <span class="s">int</span> <span class="n">0..23</span>,
+  <span class="k">dir</span>:     <span class="s">enum</span> [N, E, S, W],
+  <span class="k">comment</span>: <span class="s">string</span>  <span class="c">// ≤ 90 chars, estilo GLaDOS</span>
+}
+
+<span class="c">// tool_choice: { type: "tool", name: "cast_spell" }</span>
+<span class="c">// model: claude-haiku-4-5 · max_tokens: 200</span></pre>
+    </div>
+    <div class="box tablewrap" data-title="CINCO FRASES PROBADAS CONTRA LA API" style="margin-top:24px">
+      <table>
+        <thead><tr><th>Frase</th><th>Hechizo</th><th>Dónde cae</th><th>Latencia</th></tr></thead>
+        <tbody>
+          <tr><td>«lanza un proyectil hacia la derecha»</td><td class="sp">LWSS</td><td>2 celdas al este del héroe, dir E</td><td class="n">1.9 s</td></tr>
+          <tr><td>«protégeme por arriba»</td><td class="sp">Block</td><td>2 celdas al norte del héroe</td><td class="n">1.6 s</td></tr>
+          <tr><td>«haz estallar el centro»</td><td class="sp">R-pentomino</td><td>(19, 11), el centro del tablero</td><td class="n">1.6 s</td></tr>
+          <tr><td>«pon un faro a mi lado»</td><td class="sp">Blinker</td><td>2 celdas al este del héroe</td><td class="n">1.6 s</td></tr>
+          <tr><td>«algo que aguante los disparos»</td><td class="sp">Eater</td><td>2 celdas al este del héroe</td><td class="n">1.5 s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>El grimorio</h2></div>
+    <div class="grim">
+      <div class="spell ship"><img src="assets/icons/glider.svg" alt=""><b>Glider</b><small>proyectil diagonal</small><kbd>1</kbd></div>
+      <div class="spell ship"><img src="assets/icons/lwss.svg" alt=""><b>LWSS</b><small>nave recta, rompe muros</small><kbd>2</kbd></div>
+      <div class="spell static"><img src="assets/icons/block.svg" alt=""><b>Block</b><small>muro</small><kbd>3</kbd></div>
+      <div class="spell static"><img src="assets/icons/beehive.svg" alt=""><b>Beehive</b><small>muro resistente</small><kbd>4</kbd></div>
+      <div class="spell static"><img src="assets/icons/blinker.svg" alt=""><b>Blinker</b><small>faro, oscila</small><kbd>5</kbd></div>
+      <div class="spell chaos"><img src="assets/icons/r_pentomino.svg" alt=""><b>R-pent.</b><small>bomba de caos</small><kbd>6</kbd></div>
+      <div class="spell static"><img src="assets/icons/eater.svg" alt=""><b>Eater</b><small>devora proyectiles</small><kbd>7</kbd></div>
+    </div>
+    <p class="muted" style="margin-top:14px;font-size:13px">Cada patrón se guarda en su forma canónica viajando al este y se rota en tiempo real. Un selftest estampa cada nave en un tablero vacío, corre ocho generaciones y comprueba que el centroide se movió hacia donde se pidió.</p>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Cómo se construyó en 66 minutos</h2></div>
+    <div class="build">
+      <div class="box" data-title="TRES OLAS DE AGENTES Y UN CARRIL HUMANO">
+        <div class="lanes">
+          <span class="lbl">OLA 1 · 7 AGENTES</span>
+          <div class="lane"><span class="chip">shell</span><span class="chip">life</span><span class="chip">patterns</span><span class="chip">render</span><span class="chip">game</span><span class="chip">spells</span><span class="chip">ui</span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span></div>
+          <span class="lbl">OLA 2 · 3 AGENTES</span>
+          <div class="lane"><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip m">audio</span><span class="chip m">tutorial</span><span class="chip m">score</span><span class="chip a"></span><span class="chip a"></span></div>
+          <span class="lbl">OLA 3 · 1 AGENTE</span>
+          <div class="lane"><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip i">integración</span><span class="chip i">demo</span></div>
+          <span class="lbl">HUMANO · PEDRO</span>
+          <div class="lane"><span class="chip h">clawd</span><span class="chip h">sfx</span><span class="chip h">música</span><span class="chip h">sprites</span><span class="chip h">iconos</span><span class="chip h">logo</span><span class="chip h">medallas</span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span><span class="chip a"></span></div>
+          <div class="axis"><span>19:35</span><span>19:50</span><span>20:05</span><span>20:20</span><span>20:41</span></div>
+        </div>
+        <div class="legend"><span><i style="background:var(--cyan)"></i>código P0 en paralelo</span><span><i style="background:var(--magenta)"></i>código P1</span><span><i style="background:var(--green)"></i>integración y ensayo</span><span><i style="background:var(--orange)"></i>assets a mano, sin agentes</span></div>
+      </div>
+      <div class="facts">
+        <div class="box" data-title="EL CONTRATO">
+          <p>Un <code>CLAUDE.md</code> escrito antes de la primera línea de código: firma de cada función, forma del estado, nivel determinista, paleta y nombres exactos de los assets. Cada card es dueña de archivos distintos, así que siete agentes escribieron a <code>main</code> al mismo tiempo sin un solo conflicto.</p>
+        </div>
+        <div class="box" data-title="EL FALLBACK COMO REGLA">
+          <p>Todo módulo funciona sin sus vecinos y sin sus assets. El juego corre sin API key, sin sprite y sin música, y cada pieza que llega lo mejora. Eso es lo que permitió que el arte y el código avanzaran en paralelo sin hablarse.</p>
+        </div>
+        <div class="box" data-title="QUIÉN HIZO QUÉ">
+          <p>Juan dirigió a los agentes y escribió el contrato con Claude. Pedro produjo los 21 archivos de arte y sonido. Los agentes escribieron el código, los tests y hasta el guion de demo, verificando la corrida ganadora con Playwright contra el juego real.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head"><h2>Guion de demo, 3 minutos</h2></div>
+    <div class="script">
+      <div class="box" data-title="SECUENCIA GANADORA · TURNO 15 · RANGO S">
+        <p style="font-size:14px">Nivel fijo, así que esto se puede ensayar. Tres al oeste con wrap, nueve al norte, un R-pentomino que rompe el tub, dos al oeste hasta la salida.</p>
+        <div class="seq">
+          <kbd>A</kbd><kbd>A</kbd><kbd>A</kbd><span class="sep">·</span>
+          <kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><kbd>W</kbd><span class="sep">·</span>
+          <kbd>6</kbd><span class="sep">·</span>
+          <kbd>A</kbd><kbd>A</kbd>
+        </div>
+        <p class="muted" style="margin-top:14px;font-size:13px">Para el momento con la API: parar en la columna 39 y escribir «haz estallar la salida» en la consola en lugar de pulsar 6. Hay un LWSS cruzando la fila 16 alrededor de la generación 20, así que no conviene demorarse.</p>
+      </div>
+      <div class="box planb" data-title="PLAN B">
+        <p style="font-size:14px">Si la API tarda, el wifi de la sala falla o no hay key, no hay pausa: el juego sigue con las teclas 1 a 7 y el log dice «Reactor offline. Improviso.». La secuencia de la izquierda no toca la red.</p>
+        <p style="margin-top:14px;font-size:14px"><b style="color:var(--white);font-weight:500">Antes de subir al escenario:</b> abrir el juego en Chrome, pasar el tutorial una vez para que la key quede en localStorage, pulsar <kbd>F</kbd> y confirmar 120+ FPS, subir el volumen.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="wrap">
+  <a href="https://balaclavaam.github.io/conway-spellcaster/" target="_blank" rel="noopener">Jugar</a>
+  <a href="https://github.com/BalaclavaAM/conway-spellcaster" target="_blank" rel="noopener">Repositorio</a>
+  <a href="https://github.com/users/BalaclavaAM/projects/2" target="_blank" rel="noopener">Tablero de cards</a>
+  <a href="https://github.com/BalaclavaAM/conway-spellcaster/blob/main/CLAUDE.md" target="_blank" rel="noopener">CLAUDE.md</a>
+  <span>Motor: JS vanilla, canvas, Web Audio · IA: Claude Haiku 4.5 con tool use</span>
+</footer>
+
+<script>
+(function () {
+  var cv = document.getElementById('life');
+  var ctx = cv.getContext('2d');
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var CELL = 28, W, H, grid, next, age, t = 0, gen = 0, stale = 0, lastPop = -1;
+
+  function seed() {
+    grid = new Uint8Array(W * H); age = new Uint16Array(W * H); next = new Uint8Array(W * H);
+    var stamp = function (cells, ox, oy) { cells.forEach(function (c) { var x = (ox + c[0] + W) % W, y = (oy + c[1] + H) % H; grid[y * W + x] = 1; }); };
+    var glider = [[1,0],[2,1],[0,2],[1,2],[2,2]], lwss = [[1,0],[4,0],[0,1],[0,2],[4,2],[0,3],[1,3],[2,3],[3,3]], rpent = [[1,0],[2,0],[0,1],[1,1],[1,2]];
+    for (var i = 0; i < 4; i++) stamp(glider, Math.floor(Math.random() * W), Math.floor(Math.random() * H));
+    stamp(lwss, 2, Math.floor(H * 0.75)); stamp(rpent, Math.floor(W * 0.62), Math.floor(H * 0.35)); stamp(rpent, Math.floor(W * 0.2), Math.floor(H * 0.3));
+    gen = 0; stale = 0; lastPop = -1;
+  }
+  function resize() {
+    var r = cv.parentNode.getBoundingClientRect(), dpr = Math.min(window.devicePixelRatio || 1, 2);
+    cv.width = Math.floor(r.width * dpr); cv.height = Math.floor(r.height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    W = Math.ceil(r.width / CELL); H = Math.ceil(r.height / CELL);
+    seed();
+  }
+  function step() {
+    var pop = 0;
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      var n = 0;
+      for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+        if (!dx && !dy) continue;
+        n += grid[((y + dy + H) % H) * W + ((x + dx + W) % W)];
+      }
+      var i = y * W + x, alive = grid[i] ? (n === 2 || n === 3) : n === 3;
+      next[i] = alive ? 1 : 0; age[i] = alive ? age[i] + 1 : 0; pop += alive;
+    }
+    var tmp = grid; grid = next; next = tmp; gen++;
+    if (pop === lastPop) stale++; else stale = 0;
+    lastPop = pop;
+    if (stale > 12 || pop < 6 || gen > 260) seed();
+  }
+  function draw() {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (var y = 0; y < H; y++) for (var x = 0; x < W; x++) {
+      var i = y * W + x; if (!grid[i]) continue;
+      var fresh = age[i] <= 1, px = x * CELL + 3, py = y * CELL + 3, s = CELL - 6;
+      ctx.fillStyle = fresh ? 'rgba(234,252,255,.16)' : 'rgba(25,230,255,.07)';
+      ctx.fillRect(px, py, s, s);
+      ctx.strokeStyle = fresh ? 'rgba(234,252,255,.55)' : 'rgba(25,230,255,.32)';
+      ctx.lineWidth = 1.5; ctx.strokeRect(px + .5, py + .5, s - 1, s - 1);
+    }
+    var g = ctx.createLinearGradient(0, 0, 0, cv.height / (Math.min(window.devicePixelRatio || 1, 2)));
+    g.addColorStop(0, 'rgba(5,6,8,.25)'); g.addColorStop(.55, 'rgba(5,6,8,.72)'); g.addColorStop(1, 'rgba(5,6,8,.96)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, cv.width, cv.height);
+  }
+  function loop(ts) {
+    if (ts - t > 140) { step(); t = ts; draw(); }
+    requestAnimationFrame(loop);
+  }
+  resize(); window.addEventListener('resize', resize);
+  for (var k = 0; k < 6; k++) step();
+  draw();
+  if (!reduce) requestAnimationFrame(loop);
+})();
+</script>
