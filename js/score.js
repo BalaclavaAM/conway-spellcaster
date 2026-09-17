@@ -1,0 +1,282 @@
+/**
+ * Score calculation and display overlay for Conway Spellcaster.
+ * Exports computeScore (pure) and showScore (DOM-based).
+ */
+
+/**
+ * Calculate final score from game state (pure function).
+ * @param {Object} state - Game state with { phase, turn, maxTurns, spellsCast, everOutOfRange, gen, pop }
+ * @returns {{ total: number, rank: string, breakdown: Array<{label: string, value: number, points: number}> }}
+ */
+export function computeScore(state) {
+  const breakdown = [];
+  let total = 0;
+
+  const turn = state.turn || 0;
+  const maxTurns = state.maxTurns || 30;
+  const spellsCast = state.spellsCast || 0;
+
+  // Base points (1000 only if won)
+  if (state.phase === 'won') {
+    breakdown.push({ label: 'Base', value: null, points: 1000 });
+    total += 1000;
+  }
+
+  // Turns: 25 × max(0, maxTurns - turn) (only if won)
+  if (state.phase === 'won') {
+    const turnBonus = Math.max(0, maxTurns - turn);
+    const turnPoints = 25 * turnBonus;
+    if (turnPoints > 0) {
+      breakdown.push({ label: `Turnos sobrantes ${turnBonus} × 25`, value: null, points: turnPoints });
+      total += turnPoints;
+    }
+  }
+
+  // Spells: 150 × min(spellsCast, 4)
+  const spellBonus = Math.min(spellsCast, 4);
+  const spellPoints = 150 * spellBonus;
+  if (spellPoints > 0) {
+    breakdown.push({ label: `Hechizos ${spellsCast} × 150`, value: null, points: spellPoints });
+    total += spellPoints;
+  }
+
+  // Never out of range: 300 if everOutOfRange === false
+  if (!state.everOutOfRange) {
+    breakdown.push({ label: 'Reactor estable', value: null, points: 300 });
+    total += 300;
+  }
+
+  // Determine rank
+  let rank = 'C';
+  if (total >= 2200) rank = 'S';
+  else if (total >= 1800) rank = 'A';
+  else if (total >= 1400) rank = 'B';
+
+  return { total, rank, breakdown };
+}
+
+/**
+ * Display score overlay in root element.
+ * @param {HTMLElement} root - The #overlay element
+ * @param {Object} state - Game state
+ * @param {Function} onRetry - Callback when "OTRA VEZ" is pressed or R key is hit
+ */
+export function showScore(root, state, onRetry) {
+  const score = computeScore(state);
+  const won = state.phase === 'won';
+  const title = won ? 'REACTOR ESTABILIZADO' : 'REACTOR PERDIDO';
+
+  // Border color based on phase
+  const borderColor = won ? 'var(--orange)' : 'var(--red)';
+
+  // Clear any previous content
+  root.innerHTML = '';
+
+  // Inject styles for the score box border and title color
+  const styleId = 'score-overlay-styles';
+  let styleEl = document.getElementById(styleId);
+  if (!styleEl) {
+    styleEl = document.createElement('style');
+    styleEl.id = styleId;
+    document.head.appendChild(styleEl);
+  }
+
+  const hexColor = won ? '#ff7a1a' : '#ff3b3b';
+  styleEl.textContent = `
+    #score-box {
+      border-color: ${hexColor} !important;
+    }
+    #score-box[data-title]::before {
+      color: ${hexColor} !important;
+    }
+  `;
+
+  // Create the score box with custom border color
+  const box = document.createElement('div');
+  box.className = 'box';
+  box.id = 'score-box';
+  box.setAttribute('data-title', title);
+  box.style.maxWidth = '500px';
+
+  // Rank medal image (centered, 64px)
+  const medalContainer = document.createElement('div');
+  medalContainer.style.cssText = `
+    text-align: center;
+    margin-bottom: 1.5em;
+  `;
+
+  const rankImg = document.createElement('img');
+  rankImg.src = `assets/rank_${score.rank}.svg`;
+  rankImg.style.cssText = `
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+  `;
+  rankImg.onerror = () => { rankImg.style.display = 'none'; };
+  medalContainer.appendChild(rankImg);
+  box.appendChild(medalContainer);
+
+  // Breakdown lines (monospace, dotted leaders)
+  const breakdownContainer = document.createElement('div');
+  breakdownContainer.style.cssText = `
+    font-family: var(--font-mono);
+    font-size: 0.95em;
+    margin-bottom: 0.8em;
+    color: var(--white);
+    line-height: 1.6;
+  `;
+
+  score.breakdown.forEach((item, idx) => {
+    const line = document.createElement('div');
+    line.style.cssText = `
+      display: flex;
+      justify-content: space-between;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      align-items: baseline;
+      gap: 0.5em;
+    `;
+
+    const label = document.createElement('span');
+    label.textContent = item.label;
+    label.style.whiteSpace = 'nowrap';
+    label.style.flexShrink = '0';
+
+    const dots = document.createElement('span');
+    dots.style.cssText = `
+      flex: 1;
+      border-bottom: 1px dotted var(--border);
+      min-width: 1em;
+      height: 0;
+    `;
+
+    const points = document.createElement('span');
+    points.textContent = item.points.toString();
+    points.style.cssText = `
+      color: var(--cyan);
+      text-align: right;
+      white-space: nowrap;
+      min-width: 3em;
+      flex-shrink: 0;
+    `;
+
+    line.appendChild(label);
+    line.appendChild(dots);
+    line.appendChild(points);
+    breakdownContainer.appendChild(line);
+
+    // Stagger appearance with timeout (150ms delay)
+    setTimeout(() => {
+      line.style.opacity = '1';
+    }, 150 * (idx + 1));
+  });
+
+  box.appendChild(breakdownContainer);
+
+  // Separator line
+  const separator = document.createElement('div');
+  separator.style.cssText = `
+    border-bottom: 1px solid var(--border);
+    margin: 0.8em 0;
+  `;
+  box.appendChild(separator);
+
+  // Total score (large, animated, cyan with glow)
+  const totalContainer = document.createElement('div');
+  totalContainer.style.cssText = `
+    text-align: center;
+    margin-bottom: 1em;
+  `;
+
+  const totalLabel = document.createElement('div');
+  totalLabel.style.cssText = `
+    font-family: var(--font-pixel);
+    font-size: 1.8em;
+    color: var(--cyan);
+    text-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan-dim);
+    letter-spacing: 0.1em;
+  `;
+
+  totalLabel.innerHTML = `TOTAL <span id="counter">0</span>`;
+  totalContainer.appendChild(totalLabel);
+  box.appendChild(totalContainer);
+
+  // Stats line (small, gray)
+  const stats = document.createElement('div');
+  stats.style.cssText = `
+    text-align: center;
+    font-size: 0.8em;
+    color: var(--border);
+    margin-bottom: 1.2em;
+    font-family: var(--font-mono);
+  `;
+  stats.textContent = `gen ${state.gen || 0} · turn ${state.turn || 0} / ${state.maxTurns || 30}`;
+  box.appendChild(stats);
+
+  // Retry button (green, positioned at bottom right)
+  const btnContainer = document.createElement('div');
+  btnContainer.style.cssText = `
+    text-align: right;
+  `;
+
+  const btn = document.createElement('button');
+  btn.className = 'btn';
+  btn.textContent = 'OTRA VEZ (R)';
+  btn.style.cssText = `
+    color: var(--green);
+    border-color: var(--green);
+  `;
+
+  let animationId = null;
+
+  const cleanup = () => {
+    if (animationId) cancelAnimationFrame(animationId);
+    document.removeEventListener('keydown', handleKeydown);
+  };
+
+  const handleRetry = () => {
+    cleanup();
+    root.innerHTML = '';
+    onRetry();
+  };
+
+  btn.addEventListener('click', handleRetry);
+
+  btnContainer.appendChild(btn);
+  box.appendChild(btnContainer);
+
+  // Animate counter from 0 to total with easeOut
+  const counterEl = totalLabel.querySelector('span');
+  const startTime = performance.now();
+  const duration = 1200; // 1.2 seconds
+
+  const animateCounter = (currentTime) => {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+
+    // easeOut: 1 - (1-t)^3
+    const easeOut = 1 - Math.pow(1 - progress, 3);
+    const displayValue = Math.floor(easeOut * score.total);
+
+    if (counterEl) {
+      counterEl.textContent = displayValue;
+    }
+
+    if (progress < 1) {
+      animationId = requestAnimationFrame(animateCounter);
+    }
+  };
+
+  animationId = requestAnimationFrame(animateCounter);
+
+  // Keyboard handler (R key)
+  const handleKeydown = (e) => {
+    if (e.key.toUpperCase() === 'R') {
+      e.preventDefault();
+      handleRetry();
+    }
+  };
+  document.addEventListener('keydown', handleKeydown);
+
+  root.appendChild(box);
+}
