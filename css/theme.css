@@ -56,12 +56,15 @@ body {
   position: absolute;
   top: -0.7em;
   left: 0.6em;
+  max-width: calc(100% - 1.2em);
   padding: 0 0.35em;
   background: var(--panel);
   color: var(--cyan);
   font-size: 0.72em;
   letter-spacing: 0.05em;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- botón neón ---- */
