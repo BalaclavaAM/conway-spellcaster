@@ -25,6 +25,7 @@ function ensureContext() {
     loadAssets();
     music(true);
   }
+  if (ctx.state === 'suspended') ctx.resume();
 }
 
 async function loadAssets() {
