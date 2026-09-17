@@ -66,13 +66,20 @@ export function showScore(root, state, onRetry) {
   const won = state.phase === 'won';
   const title = won ? 'REACTOR ESTABILIZADO' : 'REACTOR PERDIDO';
 
-  // Border color based on phase
-  const borderColor = won ? 'var(--orange)' : 'var(--red)';
+  // Color values
+  const hexColor = won ? '#ff7a1a' : '#ff3b3b';
+
+  const rankColors = {
+    'S': '#ff7a1a',
+    'A': '#19e6ff',
+    'B': '#35ff8a',
+    'C': '#888888'
+  };
 
   // Clear any previous content
   root.innerHTML = '';
 
-  // Inject styles for the score box border and title color
+  // Inject styles for the score box border, title, and fallback medal
   const styleId = 'score-overlay-styles';
   let styleEl = document.getElementById(styleId);
   if (!styleEl) {
@@ -81,24 +88,59 @@ export function showScore(root, state, onRetry) {
     document.head.appendChild(styleEl);
   }
 
-  const hexColor = won ? '#ff7a1a' : '#ff3b3b';
+  const medalCssColor = rankColors[score.rank];
   styleEl.textContent = `
     #score-box {
-      border-color: ${hexColor} !important;
+      border: 1px solid ${hexColor} !important;
+      box-shadow: 0 0 18px ${hexColor === '#ff7a1a' ? 'rgba(255,122,26,.35)' : 'rgba(255,59,59,.35)'} !important;
+      min-width: 420px;
+      padding: 28px;
+      max-width: 520px;
     }
     #score-box[data-title]::before {
       color: ${hexColor} !important;
     }
+    #medal-fallback {
+      width: 96px;
+      height: 96px;
+      border: 4px solid ${medalCssColor};
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-pixel);
+      font-size: 48px;
+      color: ${medalCssColor};
+      text-shadow: 0 0 12px ${medalCssColor};
+      margin: 0 auto 1.5em;
+      position: relative;
+    }
+    #medal-fallback::after,
+    #medal-fallback::before {
+      content: '';
+      position: absolute;
+      width: 16px;
+      height: 8px;
+      background: ${medalCssColor};
+      top: 90%;
+    }
+    #medal-fallback::before {
+      left: 20%;
+      transform: rotate(-35deg);
+    }
+    #medal-fallback::after {
+      right: 20%;
+      transform: rotate(35deg);
+    }
   `;
 
-  // Create the score box with custom border color
+  // Create the score box with custom styling
   const box = document.createElement('div');
   box.className = 'box';
   box.id = 'score-box';
   box.setAttribute('data-title', title);
-  box.style.maxWidth = '500px';
 
-  // Rank medal image (centered, 64px)
+  // Rank medal container (image or fallback)
   const medalContainer = document.createElement('div');
   medalContainer.style.cssText = `
     text-align: center;
@@ -108,22 +150,34 @@ export function showScore(root, state, onRetry) {
   const rankImg = document.createElement('img');
   rankImg.src = `assets/rank_${score.rank}.svg`;
   rankImg.style.cssText = `
-    width: 64px;
-    height: 64px;
+    width: 96px;
+    height: 96px;
     object-fit: contain;
   `;
-  rankImg.onerror = () => { rankImg.style.display = 'none'; };
+
+  // Create fallback medal
+  const medalFallback = document.createElement('div');
+  medalFallback.id = 'medal-fallback';
+  medalFallback.textContent = score.rank;
+  medalFallback.style.display = 'none';
+
+  rankImg.onerror = () => {
+    rankImg.style.display = 'none';
+    medalFallback.style.display = 'flex';
+  };
+
   medalContainer.appendChild(rankImg);
+  medalContainer.appendChild(medalFallback);
   box.appendChild(medalContainer);
 
   // Breakdown lines (monospace, dotted leaders)
   const breakdownContainer = document.createElement('div');
   breakdownContainer.style.cssText = `
     font-family: var(--font-mono);
-    font-size: 0.95em;
-    margin-bottom: 0.8em;
+    font-size: 16px;
+    margin-bottom: 1em;
     color: var(--white);
-    line-height: 1.6;
+    line-height: 1.8;
   `;
 
   score.breakdown.forEach((item, idx) => {
@@ -134,30 +188,32 @@ export function showScore(root, state, onRetry) {
       opacity: 0;
       transition: opacity 0.3s ease;
       align-items: baseline;
-      gap: 0.5em;
+      gap: 0.4em;
     `;
 
     const label = document.createElement('span');
     label.textContent = item.label;
-    label.style.whiteSpace = 'nowrap';
-    label.style.flexShrink = '0';
+    label.style.cssText = `
+      white-space: nowrap;
+      flex-shrink: 0;
+    `;
 
     const dots = document.createElement('span');
     dots.style.cssText = `
       flex: 1;
-      border-bottom: 1px dotted var(--border);
+      border-bottom: 2px dotted var(--border);
+      margin: 0 6px 4px 6px;
       min-width: 1em;
-      height: 0;
     `;
 
     const points = document.createElement('span');
     points.textContent = item.points.toString();
     points.style.cssText = `
-      color: var(--cyan);
+      color: var(--white);
       text-align: right;
       white-space: nowrap;
-      min-width: 3em;
       flex-shrink: 0;
+      min-width: 3.5em;
     `;
 
     line.appendChild(label);
@@ -173,10 +229,10 @@ export function showScore(root, state, onRetry) {
 
   box.appendChild(breakdownContainer);
 
-  // Separator line
+  // Separator line (dashes)
   const separator = document.createElement('div');
   separator.style.cssText = `
-    border-bottom: 1px solid var(--border);
+    border-top: 1px dashed var(--border);
     margin: 0.8em 0;
   `;
   box.appendChild(separator);
@@ -185,15 +241,15 @@ export function showScore(root, state, onRetry) {
   const totalContainer = document.createElement('div');
   totalContainer.style.cssText = `
     text-align: center;
-    margin-bottom: 1em;
+    margin-bottom: 1.2em;
   `;
 
   const totalLabel = document.createElement('div');
   totalLabel.style.cssText = `
     font-family: var(--font-pixel);
-    font-size: 1.8em;
+    font-size: 34px;
     color: var(--cyan);
-    text-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan-dim);
+    text-shadow: 0 0 12px var(--cyan), 0 0 20px var(--cyan-dim);
     letter-spacing: 0.1em;
   `;
 
@@ -205,7 +261,7 @@ export function showScore(root, state, onRetry) {
   const stats = document.createElement('div');
   stats.style.cssText = `
     text-align: center;
-    font-size: 0.8em;
+    font-size: 12px;
     color: var(--border);
     margin-bottom: 1.2em;
     font-family: var(--font-mono);
@@ -225,6 +281,8 @@ export function showScore(root, state, onRetry) {
   btn.style.cssText = `
     color: var(--green);
     border-color: var(--green);
+    font-family: var(--font-mono);
+    font-size: 15px;
   `;
 
   let animationId = null;
