@@ -289,9 +289,10 @@ function updateLog(log = []) {
       line.textContent = '';
       return;
     }
+    const kind = entry.kind || 'sys';
     line.hidden = false;
-    line.textContent = entry.text;
-    line.className = `ui-log-line ui-log-line--${entry.kind || 'sys'}`;
+    line.textContent = kind === 'cast' ? `> ${entry.text}` : entry.text;
+    line.className = `ui-log-line ui-log-line--${kind}`;
   });
 }
 
