@@ -387,8 +387,13 @@ async function startGame() {
 
   if (tutorial && typeof tutorial.showTutorial === 'function') {
     tutorial.showTutorial(overlayEl(), () => {
-      state.phase = 'play';
-      syncViews();
+      // #12: diferir al siguiente tick; si no, el mismo Enter que cierra el tutorial
+      // llega al handler de juego con phase='play' y enfoca la consola (WASD se escribía en el textarea).
+      setTimeout(() => {
+        state.phase = 'play';
+        if (document.activeElement && document.activeElement.tagName === 'TEXTAREA') document.activeElement.blur();
+        syncViews();
+      }, 0);
     });
   } else {
     state.phase = 'play';
