@@ -62,13 +62,13 @@ function injectStyles() {
     .ui-caret { margin-left: 2px; animation: ui-blink 1s step-end infinite; }
     @keyframes ui-blink { 0%, 49% { opacity: 1; } 50%, 100% { opacity: 0; } }
 
-    .ui-gauge { display: flex; gap: 8px; height: 150px; }
+    .ui-gauge { display: flex; gap: 8px; height: 210px; }
     .ui-gauge-ticks {
       display: flex; flex-direction: column; justify-content: space-between;
       font-size: 0.7em; color: var(--border, #2a3140); text-align: right;
     }
     .ui-gauge-track {
-      position: relative; width: 14px;
+      position: relative; width: 28px;
       border: 1px solid var(--border, #2a3140);
     }
     .ui-gauge-track--alarm { animation: ui-alarm-blink 0.5s steps(1) infinite; }
@@ -87,13 +87,18 @@ function injectStyles() {
 
     .ui-ai-comment { min-height: 2.4em; color: var(--orange, #ff7a1a); font-size: 0.85em; margin: 0; }
 
-    .ui-grimoire { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+    .ui-grimoire { display: flex; gap: 4px; justify-content: space-between; }
     .ui-spell-icon {
-      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+      width: 44px; height: 44px;
       background: transparent; border: 1px solid var(--border, #2a3140);
-      padding: 4px; cursor: pointer; color: var(--cyan, #19e6ff);
+      padding: 2px; cursor: pointer; color: var(--cyan, #19e6ff);
     }
-    .ui-spell-icon img, .ui-spell-glyph { width: 22px; height: 22px; line-height: 22px; text-align: center; }
+    .ui-spell-icon-glyph {
+      width: 28px; height: 28px; line-height: 28px; text-align: center;
+      color: var(--cyan, #19e6ff); filter: drop-shadow(0 0 4px var(--cyan, #19e6ff));
+    }
+    .ui-spell-icon-glyph svg { width: 100%; height: 100%; fill: currentColor; }
     .ui-spell-key { font-size: 0.7em; color: var(--cyan-dim, #0a6b78); }
 
     .ui-api-modal { max-width: 320px; }
@@ -237,21 +242,22 @@ export async function mountUI(root, { onSpell, onKey } = {}) {
     btn.title = spell.desc || spell.name;
     btn.dataset.key = key;
 
-    const img = document.createElement('img');
-    img.src = `assets/icons/${id}.svg`;
-    img.alt = spell.name;
-    img.onerror = () => {
-      const glyph = document.createElement('span');
-      glyph.className = 'ui-spell-glyph';
-      glyph.textContent = spell.glyph;
-      img.replaceWith(glyph);
-    };
+    // #12: un <img> con un SVG fill="currentColor" pinta negro (currentColor no
+    // se resuelve dentro del documento del <img>). Se busca el SVG como texto y se
+    // inyecta inline para que herede el color/glow del botón; si falla, el glyph.
+    const icon = document.createElement('span');
+    icon.className = 'ui-spell-icon-glyph';
+    icon.textContent = spell.glyph;
+    fetch(`assets/icons/${id}.svg`)
+      .then((r) => (r.ok ? r.text() : Promise.reject()))
+      .then((svg) => { icon.innerHTML = svg; })
+      .catch(() => {});
 
     const keyLabel = document.createElement('span');
     keyLabel.className = 'ui-spell-key';
     keyLabel.textContent = key;
 
-    btn.append(img, keyLabel);
+    btn.append(icon, keyLabel);
     btn.addEventListener('click', () => onKey?.(key));
     grimoire.appendChild(btn);
   });
