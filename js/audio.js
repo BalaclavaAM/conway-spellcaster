@@ -46,6 +46,7 @@ async function loadAssets() {
     if (res.ok) {
       const arrayBuffer = await res.arrayBuffer();
       musicBuffer = await ctx.decodeAudioData(arrayBuffer);
+      music(true); // #12: arrancar aquí; en unlock() el buffer aún no existía y la música nunca sonaba
     }
   } catch (e) {
     // Silent fail
